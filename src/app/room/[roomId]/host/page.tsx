@@ -55,7 +55,7 @@ interface HostPageProps {
   }>;
 }
 
-export default function HostRoomPage({ params }: HostPageProps) {
+function HostRoomContent({ params }: HostPageProps) {
   const resolvedParams = use(params);
   const rawRoomId = resolvedParams.roomId;
   const roomId = rawRoomId ? rawRoomId.toUpperCase() : "";
@@ -934,4 +934,19 @@ function formatSeconds(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
   return `${m}:${s < 10 ? "0" : ""}${s}`;
+}
+
+export default function HostRoomPage(props: HostPageProps) {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 text-center">
+          <div className="w-10 h-10 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mb-3" />
+          <span className="text-sm text-slate-300 font-bold">Đang kết nối màn hình TV...</span>
+        </div>
+      }
+    >
+      <HostRoomContent {...props} />
+    </React.Suspense>
+  );
 }

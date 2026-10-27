@@ -73,7 +73,7 @@ interface ControllerPageProps {
   }>;
 }
 
-export default function ControllerPage({ params }: ControllerPageProps) {
+function ControllerContent({ params }: ControllerPageProps) {
   const resolvedParams = use(params);
   const rawRoomId = resolvedParams.roomId;
   const roomId = rawRoomId ? rawRoomId.toUpperCase() : "";
@@ -1771,5 +1771,20 @@ export default function ControllerPage({ params }: ControllerPageProps) {
         onUpdateTvName={(name) => setTvName(name)}
       />
     </div>
+  );
+}
+
+export default function ControllerPage(props: ControllerPageProps) {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 text-center">
+          <div className="w-8 h-8 border-2 border-rose-500 border-t-transparent rounded-full animate-spin mb-3" />
+          <span className="text-xs text-slate-400 font-medium">Đang tải phòng điều khiển...</span>
+        </div>
+      }
+    >
+      <ControllerContent {...props} />
+    </React.Suspense>
   );
 }
