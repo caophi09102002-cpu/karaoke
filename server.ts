@@ -49,6 +49,7 @@ app.prepare().then(() => {
             lanIp: localIp,
             port,
             localUrl: `http://${localIp}:${port}`,
+            publicUrl: "https://red-firefox-26.loca.lt",
           })
         );
         return;

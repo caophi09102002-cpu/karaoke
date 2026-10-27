@@ -108,7 +108,9 @@ export default function HostRoomPage({ params }: HostPageProps) {
         fetch("/api/server-info")
           .then((res) => res.json())
           .then((data) => {
-            if (data?.lanIp && data.lanIp !== "127.0.0.1") {
+            if (data?.publicUrl) {
+              setControllerUrl(`${data.publicUrl}/room/${roomId}/controller`);
+            } else if (data?.lanIp && data.lanIp !== "127.0.0.1") {
               const lanUrl = `http://${data.lanIp}:${window.location.port || 3000}/room/${roomId}/controller`;
               setControllerUrl(lanUrl);
             }
