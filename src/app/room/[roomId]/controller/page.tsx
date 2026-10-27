@@ -16,6 +16,7 @@ import CastDeviceModal from "@/components/CastDeviceModal";
 import { getDeviceName, saveRecentDevice } from "@/lib/cast-storage";
 import { YouTubeSearchResult } from "@/app/api/search-youtube/route";
 import KaraokeSeekBar from "@/components/KaraokeSeekBar";
+import SearchBarWithAutocomplete from "@/components/SearchBarWithAutocomplete";
 import {
   FavoriteSong,
   getFavorites,
@@ -375,9 +376,12 @@ function ControllerContent({ params }: ControllerPageProps) {
   };
 
   // Execute YouTube Search via /api/search-youtube?q=...
-  const handleSearch = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const query = searchQuery.trim();
+  const handleSearch = async (overrideQuery?: string | React.FormEvent) => {
+    if (overrideQuery && typeof overrideQuery !== "string") {
+      overrideQuery.preventDefault();
+    }
+    const target = typeof overrideQuery === "string" ? overrideQuery : searchQuery;
+    const query = target.trim();
     if (!query) return;
 
     setIsSearching(true);
@@ -687,34 +691,22 @@ function ControllerContent({ params }: ControllerPageProps) {
          ========================================================================= */}
       {activeTab === "search" && (
         <main className="flex-1 p-4 space-y-4">
-          {/* Smart Search Bar */}
-          <form onSubmit={handleSearch} className="space-y-2">
-            <div className="relative flex items-center">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm tên hoặc viết tắt (VD: 'cdns', 'Cắt đôi...')"
-                className="w-full bg-slate-900 border border-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 rounded-2xl pl-10 pr-20 py-3 text-sm text-white placeholder-slate-500 focus:outline-none shadow-lg transition-all"
-              />
-              <button
-                type="submit"
-                disabled={!searchQuery.trim() || isSearching}
-                className="absolute right-1.5 px-3.5 py-1.5 bg-gradient-to-r from-rose-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 disabled:opacity-40 text-white text-xs font-semibold rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1"
-              >
-                {isSearching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>Tìm</span>}
-              </button>
-            </div>
+          {/* Smart Search Bar with Autocomplete Suggestions */}
+          <SearchBarWithAutocomplete
+            query={searchQuery}
+            onChangeQuery={setSearchQuery}
+            onSearch={(q) => handleSearch(q)}
+            isSearching={isSearching}
+            placeholder="Tìm bài hát hoặc viết tắt (VD: 'cdns', 'Nơi này có anh')..."
+          />
 
-            {/* Smart Acronym Matching Explanation Banner */}
-            <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
-              <span className="flex items-center gap-1 text-purple-400">
-                <Sparkles className="w-3 h-3" />
-                Hỗ trợ gõ tắt: <b className="text-slate-300">cdns</b> (Cắt đôi nỗi sầu), <b className="text-slate-300">nhnt</b> (Nơi này có anh)
-              </span>
-            </div>
-          </form>
+          {/* Smart Acronym Matching Explanation Banner */}
+          <div className="flex items-center justify-between text-[11px] text-slate-500 px-1 -mt-2">
+            <span className="flex items-center gap-1 text-purple-400">
+              <Sparkles className="w-3 h-3" />
+              Hỗ trợ gõ tắt: <b className="text-slate-300">cdns</b> (Cắt đôi nỗi sầu), <b className="text-slate-300">nhnt</b> (Nơi này có anh)
+            </span>
+          </div>
 
           {/* Quick Suggestions Tags (Including Acronym examples) */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">

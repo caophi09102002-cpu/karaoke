@@ -34,6 +34,7 @@ import {
   toggleFavorite,
 } from "@/lib/favorites";
 import { YouTubeSearchResult } from "@/app/api/search-youtube/route";
+import SearchBarWithAutocomplete from "@/components/SearchBarWithAutocomplete";
 
 export default function StandaloneControllerPage() {
   const router = useRouter();
@@ -107,9 +108,12 @@ export default function StandaloneControllerPage() {
   };
 
   // Execute YouTube Search via /api/search-youtube?q=...
-  const handleSearch = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const query = searchQuery.trim();
+  const handleSearch = async (overrideQuery?: string | React.FormEvent) => {
+    if (overrideQuery && typeof overrideQuery !== "string") {
+      overrideQuery.preventDefault();
+    }
+    const target = typeof overrideQuery === "string" ? overrideQuery : searchQuery;
+    const query = target.trim();
     if (!query) return;
 
     setIsSearching(true);
@@ -235,26 +239,14 @@ export default function StandaloneControllerPage() {
       {/* Main Tab Content */}
       {activeTab === "search" && (
         <main className="flex-1 p-4 space-y-4">
-          {/* Smart Search Bar */}
-          <form onSubmit={handleSearch} className="space-y-2">
-            <div className="relative flex items-center">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm tên bài hát hoặc viết tắt (VD: 'cdns', 'Cắt đôi...')"
-                className="w-full bg-slate-900 border border-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 rounded-2xl pl-10 pr-20 py-3 text-sm text-white placeholder-slate-500 focus:outline-none shadow-lg transition-all"
-              />
-              <button
-                type="submit"
-                disabled={!searchQuery.trim() || isSearching}
-                className="absolute right-2 px-3 py-1.5 bg-gradient-to-r from-rose-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 disabled:opacity-40 text-white text-xs font-semibold rounded-xl transition-all shadow-md cursor-pointer"
-              >
-                {isSearching ? "Tìm..." : "Tìm"}
-              </button>
-            </div>
-          </form>
+          {/* Smart Search Bar with Autocomplete Suggestions */}
+          <SearchBarWithAutocomplete
+            query={searchQuery}
+            onChangeQuery={setSearchQuery}
+            onSearch={(q) => handleSearch(q)}
+            isSearching={isSearching}
+            placeholder="Tìm bài hát hoặc viết tắt (VD: 'cdns', 'Cắt đôi...')"
+          />
 
           {/* Search Results List */}
           {searchResults.length > 0 ? (
