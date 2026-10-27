@@ -97,6 +97,7 @@ function HostRoomContent({ params }: HostPageProps) {
   const currentSongRef = useRef<QueueItem | null>(null);
   currentSongRef.current = currentSong;
   const lastTimeUpdateSentRef = useRef<number>(0);
+  const initialSeekTimeRef = useRef<number>(0);
 
   // Mobile-friendly LAN URL detection
   useEffect(() => {
@@ -253,6 +254,11 @@ function HostRoomContent({ params }: HostPageProps) {
         setIsPlaying(res.room.isPlaying);
         setControllersCount(res.room.controllers.length);
         setControllerList(res.room.controllers);
+
+        if (typeof res.room.currentTime === "number" && res.room.currentTime > 0) {
+          initialSeekTimeRef.current = res.room.currentTime;
+          setCurrentTime(res.room.currentTime);
+        }
 
         if (typeof res.room.vocalMuted === "boolean") {
           setIsVocalMuted(res.room.vocalMuted);
@@ -609,6 +615,10 @@ function HostRoomContent({ params }: HostPageProps) {
                   onReady={(event) => {
                     ytPlayerRef.current = event.target;
                     event.target.playVideo();
+                    if (initialSeekTimeRef.current > 3) {
+                      console.log(`[Host] Restoring playback time to: ${initialSeekTimeRef.current}s`);
+                      event.target.seekTo(initialSeekTimeRef.current, true);
+                    }
                     setDuration(event.target.getDuration() || currentSong.duration);
                   }}
                   onEnd={handleSongEnded}
@@ -621,17 +631,29 @@ function HostRoomContent({ params }: HostPageProps) {
               </div>
             )}
 
-            {/* PAUSED BANNER OVERLAY */}
+            {/* PAUSED BANNER OVERLAY - CLICKABLE TO RESUME PLAYBACK */}
             {!isPlaying && (
-              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-30">
-                <div className="p-5 bg-rose-600/90 rounded-full text-white shadow-2xl animate-pulse">
-                  <Pause className="w-12 h-12" />
+              <div
+                onClick={() => {
+                  setIsPlaying(true);
+                  if (videoRef.current) videoRef.current.play().catch(() => {});
+                  if (ytPlayerRef.current && typeof ytPlayerRef.current.playVideo === "function") {
+                    ytPlayerRef.current.playVideo();
+                  }
+                  const socket = getSocket();
+                  socket.emit("client:control", { roomId, action: "play" });
+                }}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center gap-4 z-30 cursor-pointer group hover:bg-black/70 transition-colors"
+                title="Bấm để tiếp tục phát"
+              >
+                <div className="p-6 bg-rose-600/90 group-hover:bg-rose-500 rounded-full text-white shadow-2xl animate-pulse transition-all group-hover:scale-110">
+                  <Play className="w-14 h-14 translate-x-1" />
                 </div>
                 <div className="text-2xl font-bold tracking-wider text-rose-300 uppercase">
-                  ĐANG TẠM DỪNG
+                  BẤM VÀO ĐÂY ĐỂ TIẾP TỤC PHÁT
                 </div>
                 <div className="text-sm text-slate-300">
-                  Điều khiển tiếp tục phát từ điện thoại Controller
+                  Hoặc điều khiển tiếp tục phát từ điện thoại Controller
                 </div>
               </div>
             )}

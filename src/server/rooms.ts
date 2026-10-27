@@ -1,8 +1,11 @@
+import fs from "fs";
+import path from "path";
 import { RoomState, UserRole } from "../types/socket";
 
 /**
- * In-memory state management for Karaoke rooms.
- * Stored in server RAM for ultra-fast real-time lookup and synchronization.
+ * State management for Karaoke rooms.
+ * Uses in-memory Map for ultra-fast real-time lookup and synchronization,
+ * backed by JSON persistence cache to survive page refreshes (F5) and server reloads.
  */
 class RoomManager {
   // roomId -> RoomState
@@ -10,6 +13,74 @@ class RoomManager {
 
   // socketId -> { roomId, role } for fast cleanup on disconnect
   private socketToRoom: Map<string, { roomId: string; role: UserRole }> = new Map();
+
+  // Path to persistent cache file
+  private cacheFilePath = path.join(process.cwd(), ".karaoke_rooms_cache.json");
+
+  constructor() {
+    this.loadPersistedRooms();
+
+    // Periodic cleanup of abandoned rooms older than 6 hours
+    setInterval(() => {
+      this.pruneExpiredRooms(6 * 60 * 60 * 1000);
+    }, 15 * 60 * 1000);
+  }
+
+  /**
+   * Load saved rooms from persistent cache file on startup
+   */
+  private loadPersistedRooms(): void {
+    try {
+      if (fs.existsSync(this.cacheFilePath)) {
+        const raw = fs.readFileSync(this.cacheFilePath, "utf8");
+        const list: RoomState[] = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          for (const r of list) {
+            if (r?.roomId) {
+              // Socket connections are ephemeral and reset on server start
+              r.host = null;
+              r.controllers = [];
+              r.adminSocketIds = [];
+              this.rooms.set(r.roomId.toUpperCase(), r);
+            }
+          }
+          console.log(`[RoomManager] Restored ${this.rooms.size} rooms from persistence cache.`);
+        }
+      }
+    } catch (e) {
+      console.warn("[RoomManager] Failed to load persisted rooms cache:", e);
+    }
+  }
+
+  /**
+   * Persist current rooms state to disk so F5 / restarts retain all queues & songs
+   */
+  private persistRooms(): void {
+    try {
+      const data = JSON.stringify(Array.from(this.rooms.values()), null, 2);
+      fs.writeFileSync(this.cacheFilePath, data, "utf8");
+    } catch (e) {
+      console.warn("[RoomManager] Failed to persist rooms cache:", e);
+    }
+  }
+
+  /**
+   * Prune rooms that have had zero activity for more than maxAgeMs
+   */
+  private pruneExpiredRooms(maxAgeMs: number): void {
+    const now = Date.now();
+    let prunedCount = 0;
+    for (const [id, room] of this.rooms.entries()) {
+      if (!room.host && room.controllers.length === 0 && now - room.lastActiveAt > maxAgeMs) {
+        this.rooms.delete(id);
+        prunedCount++;
+      }
+    }
+    if (prunedCount > 0) {
+      console.log(`[RoomManager] Pruned ${prunedCount} inactive rooms older than 6 hours.`);
+      this.persistRooms();
+    }
+  }
 
   /**
    * Generate a random 4-digit PIN for room administration (e.g., "1234")
@@ -37,10 +108,12 @@ class RoomManager {
         currentSong: null,
         queue: [],
         isPlaying: false,
+        currentTime: 0,
         vocalMuted: false,
         pitchShift: 0,
       };
       this.rooms.set(normalizedId, room);
+      this.persistRooms();
       console.log(`[RoomManager] Created new room: ${normalizedId} with Admin PIN: ${room.hostPin}`);
     }
 
@@ -87,6 +160,7 @@ class RoomManager {
       room.adminSocketIds.push(socketId);
     }
     room.lastActiveAt = Date.now();
+    this.persistRooms();
     console.log(`👑 [RoomManager] Socket ${socketId} successfully claimed ADMIN for room ${room.roomId}`);
 
     return {
@@ -137,7 +211,7 @@ class RoomManager {
       isUserAdmin = true;
       console.log(
         `[RoomManager] Socket ${socketId} joined as HOST for room ${roomId}${
-          previousHost ? ` (replaced previous host ${previousHost})` : ""
+          previousHost ? ` (reconnected / replaced previous host ${previousHost})` : ""
         }`
       );
     } else {
@@ -163,6 +237,7 @@ class RoomManager {
     }
 
     this.socketToRoom.set(socketId, { roomId, role });
+    this.persistRooms();
 
     return {
       success: true,
@@ -174,7 +249,9 @@ class RoomManager {
   }
 
   /**
-   * Remove a socket from their current room
+   * Remove a socket from their current room without destroying the room!
+   * Room data (queue, currentSong, PIN) is intentionally preserved so F5 reload or temporary
+   * disconnections do not wipe selected songs.
    */
   public leaveRoom(
     socketId: string,
@@ -204,7 +281,7 @@ class RoomManager {
 
     if (meta.role === "host" && room.host === socketId) {
       room.host = null;
-      console.log(`[RoomManager] Host ${socketId} left room ${roomId}`);
+      console.log(`[RoomManager] Host ${socketId} disconnected from room ${roomId} (Room state retained)`);
     } else {
       room.controllers = room.controllers.filter((id) => id !== socketId);
       console.log(
@@ -212,13 +289,8 @@ class RoomManager {
       );
     }
 
-    // If room is completely empty (no host and no controllers), delete from RAM
-    if (!room.host && room.controllers.length === 0) {
-      this.rooms.delete(roomId);
-      console.log(`[RoomManager] Room ${roomId} is empty and was pruned from RAM.`);
-      return { room: null, roomId, role: meta.role };
-    }
-
+    // Retain room in RAM & persistence so when client reconnects/refreshes, state is 100% recovered
+    this.persistRooms();
     return { room, roomId, role: meta.role };
   }
 
@@ -229,6 +301,19 @@ class RoomManager {
     socketId: string
   ): { room: RoomState | null; roomId: string; role: UserRole } | null {
     return this.leaveRoom(socketId);
+  }
+
+  /**
+   * Update current playback time recorded from Host
+   */
+  public updateCurrentTime(rawRoomId: string, currentTime: number, duration?: number): void {
+    const room = this.getRoom(rawRoomId);
+    if (!room) return;
+    room.currentTime = currentTime;
+    if (typeof duration === "number" && duration > 0) {
+      room.duration = duration;
+    }
+    room.lastActiveAt = Date.now();
   }
 
   /**
@@ -245,35 +330,52 @@ class RoomManager {
     if (!room.currentSong) {
       room.currentSong = item;
       room.isPlaying = true;
+      room.currentTime = 0;
       console.log(`[RoomManager] Room ${room.roomId}: Now playing immediate "${item.title}"`);
+      this.persistRooms();
       return { room, isImmediatePlay: true };
     } else {
       room.queue.push(item);
       console.log(
         `[RoomManager] Room ${room.roomId}: Added "${item.title}" to queue. Queue length: ${room.queue.length}`
       );
+      this.persistRooms();
       return { room, isImmediatePlay: false };
     }
   }
 
   /**
    * Prioritize a song in queue to play next (moves to front of queue).
-   * Only Admin or TV Host can prioritize.
+   * Permitted if sender is Admin OR the owner of the queue item (item.userId === senderUserId).
    */
   public prioritizeQueue(
     rawRoomId: string,
     itemId: string,
     senderSocketId: string,
+    senderUserId?: string,
     providedPin?: string
   ): { room: RoomState | null; success: boolean; error?: string } {
     const room = this.getRoom(rawRoomId);
     if (!room) return { room: null, success: false, error: "Phòng không tồn tại" };
 
-    if (!this.isAdmin(rawRoomId, senderSocketId, providedPin)) {
+    const targetItem = room.queue.find((i) => i.id === itemId);
+    if (!targetItem) {
+      return { room, success: false, error: "Không tìm thấy bài hát trong hàng đợi" };
+    }
+
+    const isAdminUser = this.isAdmin(rawRoomId, senderSocketId, providedPin);
+    const isOwner = Boolean(
+      senderUserId && targetItem.userId && targetItem.userId === senderUserId
+    );
+
+    if (!isAdminUser && !isOwner) {
+      console.warn(
+        `⛔ [Permission Denied] Socket ${senderSocketId} (userId: ${senderUserId}) tried to prioritize song "${targetItem.title}" owned by ${targetItem.userId}`
+      );
       return {
         room,
         success: false,
-        error: "Chỉ chủ phòng hoặc Quản trị viên mới có quyền ưu tiên bài hát!",
+        error: "Bạn chỉ có thể ưu tiên bài hát do chính bạn chọn! Chỉ chủ phòng mới có quyền ưu tiên bài của người khác.",
       };
     }
 
@@ -282,7 +384,12 @@ class RoomManager {
       const [item] = room.queue.splice(itemIndex, 1);
       room.queue.unshift(item);
       room.lastActiveAt = Date.now();
-      console.log(`[RoomManager] Room ${room.roomId}: Prioritized song "${item.title}" to next`);
+      this.persistRooms();
+      console.log(
+        `⚡ [RoomManager] Room ${room.roomId}: Prioritized song "${item.title}" to next by ${
+          isAdminUser ? "ADMIN" : "OWNER"
+        }`
+      );
       return { room, success: true };
     }
     return { room, success: itemIndex === 0 };
@@ -326,6 +433,7 @@ class RoomManager {
     const initialLen = room.queue.length;
     room.queue = room.queue.filter((i) => i.id !== itemId);
     room.lastActiveAt = Date.now();
+    this.persistRooms();
     console.log(
       `🗑️ [RoomManager] Removed song "${targetItem.title}" from room ${room.roomId} by ${
         isAdminUser ? "ADMIN" : "OWNER"
@@ -348,6 +456,7 @@ class RoomManager {
     if (room.queue.length > 0) {
       room.currentSong = room.queue.shift() || null;
       room.isPlaying = true;
+      room.currentTime = 0;
       room.pitchShift = 0; // Reset tone to original key for each new song
       console.log(
         `[RoomManager] Room ${room.roomId}: Advanced to next song "${room.currentSong?.title}". Remaining queue: ${room.queue.length}`
@@ -355,10 +464,12 @@ class RoomManager {
     } else {
       room.currentSong = null;
       room.isPlaying = false;
+      room.currentTime = 0;
       room.pitchShift = 0;
       console.log(`[RoomManager] Room ${room.roomId}: Queue is empty. Entering Standby mode.`);
     }
 
+    this.persistRooms();
     return { room, currentSong: room.currentSong };
   }
 
@@ -370,6 +481,7 @@ class RoomManager {
     if (!room) return null;
     room.isPlaying = isPlaying;
     room.lastActiveAt = Date.now();
+    this.persistRooms();
     return room;
   }
 
@@ -381,6 +493,7 @@ class RoomManager {
     if (!room) return null;
     room.vocalMuted = muted;
     room.lastActiveAt = Date.now();
+    this.persistRooms();
     return room;
   }
 
@@ -392,6 +505,7 @@ class RoomManager {
     if (!room) return null;
     room.pitchShift = Math.max(-4, Math.min(4, Math.round(pitch)));
     room.lastActiveAt = Date.now();
+    this.persistRooms();
     return room;
   }
 

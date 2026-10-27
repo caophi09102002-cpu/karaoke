@@ -431,17 +431,13 @@ function ControllerContent({ params }: ControllerPageProps) {
     });
 
     if (prioritize) {
-      if (controllerRole !== "admin") {
-        showToast("⚠️ Chỉ chủ phòng mới có quyền ưu tiên bài hát!");
-      } else {
-        socket.emit("client:prioritize", {
-          roomId,
-          itemId: newItem.id,
-          userId,
-          pin: adminPin || undefined,
-        });
-        showToast(`⚡ Đã ưu tiên: "${song.title.substring(0, 32)}..."`);
-      }
+      socket.emit("client:prioritize", {
+        roomId,
+        itemId: newItem.id,
+        userId,
+        pin: adminPin || undefined,
+      });
+      showToast(`⚡ Đã ưu tiên: "${song.title.substring(0, 32)}..."`);
     } else {
       showToast(`Đã thêm: "${song.title.substring(0, 32)}..."`);
     }
@@ -498,12 +494,8 @@ function ControllerContent({ params }: ControllerPageProps) {
     showToast(`Đã yêu cầu xóa "${itemTitle.substring(0, 20)}..."`);
   };
 
-  // Prioritize song in queue (Admin only)
+  // Prioritize song in queue (Admin or Song Owner)
   const handlePrioritizeQueue = (itemId: string, itemTitle: string) => {
-    if (controllerRole !== "admin") {
-      showToast("🔒 Chỉ chủ phòng mới có quyền ưu tiên bài hát!");
-      return;
-    }
     const socket = getSocket();
     socket.emit("client:prioritize", {
       roomId,
@@ -524,8 +516,26 @@ function ControllerContent({ params }: ControllerPageProps) {
     );
   }, [favorites, favoriteSearchQuery]);
 
-  // Remote Control command (play, pause, skip) - Admin only
+  // Remote Control command (play, pause, skip)
   const sendControl = (action: ControlAction, value?: any) => {
+    const isMySongPlaying = Boolean(
+      userId && currentSong?.userId && currentSong.userId === userId
+    );
+
+    // If skipping the song that I requested, allow it!
+    if (action === "skip" && (controllerRole === "admin" || isMySongPlaying)) {
+      const socket = getSocket();
+      socket.emit("client:control", {
+        roomId,
+        action,
+        value,
+        userId,
+        pin: adminPin || undefined,
+      });
+      showToast("⏩ Đã chuyển bài hát");
+      return;
+    }
+
     if (controllerRole !== "admin") {
       showToast("🔒 Chỉ chủ phòng mới có quyền điều khiển phát nhạc!");
       return;
@@ -1021,7 +1031,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                 const isFav = favoriteIdSet.has(item.youtubeId || "");
                 const isMine = Boolean(userId && item.userId && item.userId === userId);
                 const canDelete = controllerRole === "admin" || isMine;
-                const canPrioritize = controllerRole === "admin";
+                const canPrioritize = controllerRole === "admin" || isMine;
 
                 return (
                   <div
@@ -1039,7 +1049,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                           <span className="truncate">{item.title}</span>
                           {isMine && (
                             <span className="shrink-0 text-[9px] px-1.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-full font-bold">
-                              Của bạn
+                              Của bạn (Toàn quyền)
                             </span>
                           )}
                         </div>
@@ -1074,22 +1084,29 @@ function ControllerContent({ params }: ControllerPageProps) {
                         </button>
                       )}
 
-                      {/* Prioritize Button (Admin only) */}
-                      {canPrioritize && (
+                      {/* Prioritize Button (Admin OR Song Owner) */}
+                      {canPrioritize ? (
                         <button
                           onClick={() => handlePrioritizeQueue(item.id, item.title)}
-                          className="p-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 rounded-xl transition-all cursor-pointer"
-                          title="Ưu tiên hát tiếp theo (Quyền Chủ phòng)"
+                          className="p-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 rounded-xl transition-all cursor-pointer active:scale-95"
+                          title={isMine ? "Ưu tiên bài của bạn lên tiếp theo" : "Ưu tiên bài hát (Quyền Chủ phòng)"}
                         >
                           <Zap className="w-4 h-4" />
                         </button>
+                      ) : (
+                        <div
+                          title="Bài của người khác (Được bảo vệ)"
+                          className="p-2 text-slate-600 cursor-not-allowed opacity-40"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                        </div>
                       )}
 
-                      {/* Trash Delete Button (Admin OR Song Owner only) */}
+                      {/* Trash Delete Button (Admin OR Song Owner) */}
                       {canDelete && (
                         <button
                           onClick={() => handleRemoveQueue(item.id, item.title)}
-                          className="p-2 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 rounded-xl transition-all cursor-pointer"
+                          className="p-2 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 rounded-xl transition-all cursor-pointer active:scale-95"
                           title={isMine ? "Xóa bài do bạn đặt" : "Xóa bài (Quyền Chủ phòng)"}
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1459,17 +1476,31 @@ function ControllerContent({ params }: ControllerPageProps) {
                   </button>
                 </>
               ) : (
-                <button
-                  onClick={() => {
-                    showToast("🔒 Chỉ chủ phòng mới có quyền điều khiển!");
-                    setShowPinModal(true);
-                  }}
-                  className="px-2.5 py-1.5 bg-slate-800/80 hover:bg-slate-700 border border-amber-500/30 text-amber-300/80 hover:text-amber-300 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[11px]"
-                  title="Chỉ chủ phòng mới có quyền điều khiển"
-                >
-                  <Lock className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="text-[10px] font-semibold">Chủ phòng</span>
-                </button>
+                <div className="flex items-center gap-1.5">
+                  {/* Allow song owner to skip their own song if currently playing */}
+                  {currentSong && currentSong.userId && currentSong.userId === userId && (
+                    <button
+                      onClick={() => sendControl("skip")}
+                      className="px-2.5 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[11px] font-bold active:scale-95"
+                      title="Bỏ qua bài hát do bạn chọn"
+                    >
+                      <SkipForward className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Bỏ qua bài của bạn</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      showToast("🔒 Nhập mã PIN 4 chữ số từ TV để mở khóa quyền Chủ phòng!");
+                      setShowPinModal(true);
+                    }}
+                    className="px-2.5 py-1.5 bg-slate-800/80 hover:bg-slate-700 border border-amber-500/30 text-amber-300/80 hover:text-amber-300 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[11px]"
+                    title="Chỉ chủ phòng mới có quyền điều khiển"
+                  >
+                    <Lock className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="text-[10px] font-semibold">Chủ phòng</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>

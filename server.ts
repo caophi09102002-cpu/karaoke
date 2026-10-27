@@ -90,6 +90,8 @@ app.prepare().then(() => {
           currentSong: room.currentSong,
           queue: room.queue,
           isPlaying: room.isPlaying,
+          currentTime: room.currentTime ?? 0,
+          duration: room.duration ?? 0,
           controllersCount: room.controllers.length,
           controllers: room.controllers,
           host: room.host,
@@ -102,6 +104,8 @@ app.prepare().then(() => {
           currentSong: null,
           queue: [],
           isPlaying: false,
+          currentTime: 0,
+          duration: 0,
           controllersCount: 0,
           controllers: [],
           host: null,
@@ -265,16 +269,19 @@ app.prepare().then(() => {
     });
 
     // Queue Event: prioritize (Admin only)
+    // Queue Event: prioritize (Admin or Song Owner)
     socket.on(
       "client:prioritize",
       (payload: { roomId: string; itemId: string; userId?: string; pin?: string }) => {
-        const { roomId, itemId, pin } = payload || {};
+        const { roomId, itemId, userId, pin } = payload || {};
         if (!roomId || !itemId) return;
 
-        const result = roomManager.prioritizeQueue(roomId, itemId, socket.id, pin);
+        const result = roomManager.prioritizeQueue(roomId, itemId, socket.id, userId, pin);
         if (!result.success) {
           socket.emit("server:error", {
-            message: result.error || "Chỉ chủ phòng mới có quyền ưu tiên bài hát!",
+            message:
+              result.error ||
+              "Bạn chỉ có thể ưu tiên bài hát do chính bạn chọn! Chỉ chủ phòng mới có quyền ưu tiên bài của người khác.",
           });
           return;
         }
@@ -319,16 +326,47 @@ app.prepare().then(() => {
       }
     });
 
-    // Control Event: play / pause / skip / tone / vocal (Admin only)
+    // Control Event: play / pause / skip / tone / vocal
     socket.on("client:control", (payload: import("./src/types/socket").ControlPayload) => {
-      const { roomId, action, value, pin } = payload || {};
+      const { roomId, action, value, pin, userId } = payload || {};
       if (!roomId || !action) return;
 
-      // Anti-troll permission check: Only Admin or TV Host can control playback
-      if (!roomManager.isAdmin(roomId, socket.id, pin)) {
+      const room = roomManager.getRoom(roomId);
+      const isAdmin = roomManager.isAdmin(roomId, socket.id, pin);
+      const isSongOwner = Boolean(
+        userId && room?.currentSong?.userId && room.currentSong.userId === userId
+      );
+
+      // Skip action: Allowed if Admin OR if the current song was chosen by this user!
+      if (action === "skip") {
+        if (!isAdmin && !isSongOwner) {
+          console.warn(
+            `⛔ [Permission Denied] Socket ${socket.id} attempted to skip song "${room?.currentSong?.title}" owned by ${room?.currentSong?.userId}`
+          );
+          socket.emit("server:error", {
+            message:
+              "Bạn chỉ có thể bỏ qua bài hát do chính mình chọn! Chỉ chủ phòng mới có quyền bỏ qua bài của người khác.",
+          });
+          return;
+        }
+
+        console.log(
+          `⏩ [Skip Authorized] Room ${roomId} skipped by ${isAdmin ? "ADMIN" : "SONG OWNER"}`
+        );
+        roomManager.nextSong(roomId);
+        io.to(roomId).emit("host:control", { action: "skip" });
+        const updatedRoom = roomManager.getRoom(roomId);
+        if (updatedRoom) {
+          broadcastRoomState(roomId, updatedRoom);
+        }
+        return;
+      }
+
+      // Other control actions (play, pause, mute-vocal, pitch): Only Admin or TV Host
+      if (!isAdmin) {
         console.warn(`⛔ [Permission Denied] Socket ${socket.id} attempted control action "${action}" in room ${roomId}`);
         socket.emit("server:error", {
-          message: "Chỉ chủ phòng mới có quyền điều khiển phát nhạc (Play/Pause/Skip/Tone)!",
+          message: "Chỉ chủ phòng mới có quyền điều khiển phát nhạc (Play/Pause/Tone)!",
         });
         return;
       }
@@ -339,8 +377,6 @@ app.prepare().then(() => {
         roomManager.setPlayback(roomId, true);
       } else if (action === "pause") {
         roomManager.setPlayback(roomId, false);
-      } else if (action === "skip") {
-        roomManager.nextSong(roomId);
       } else if (action === "mute-vocal") {
         roomManager.setVocalMuted(roomId, true);
       } else if (action === "unmute-vocal") {
@@ -362,9 +398,9 @@ app.prepare().then(() => {
       io.to(roomId).emit("host:control", { action, value });
 
       // Sync state to all devices
-      const room = roomManager.getRoom(roomId);
-      if (room) {
-        broadcastRoomState(roomId, room);
+      const updated = roomManager.getRoom(roomId);
+      if (updated) {
+        broadcastRoomState(roomId, updated);
       }
     });
 
@@ -404,10 +440,11 @@ app.prepare().then(() => {
       });
     });
 
-    // Video Progress / Time Update Event from Host -> Forward to Controllers in room
+    // Video Progress / Time Update Event from Host -> Forward to Controllers in room and record in state
     socket.on("host:time-update", (payload: import("./src/types/socket").TimeUpdatePayload) => {
       const { roomId, currentTime, duration } = payload || {};
       if (!roomId || typeof currentTime !== "number") return;
+      roomManager.updateCurrentTime(roomId, currentTime, duration);
       socket.to(roomId).emit("host:time-update", {
         roomId,
         currentTime,

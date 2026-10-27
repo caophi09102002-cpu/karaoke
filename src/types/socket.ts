@@ -22,6 +22,8 @@ export interface RoomState {
   currentSong: QueueItem | null;
   queue: QueueItem[];
   isPlaying: boolean;
+  currentTime?: number;
+  duration?: number;
   vocalMuted?: boolean; // true = Beat only (Left channel cloned), false = Full Stereo
   pitchShift?: number; // -4 to +4 semitones (nửa cung)
 }
@@ -51,6 +53,8 @@ export interface SyncStatePayload {
   currentSong: QueueItem | null;
   queue: QueueItem[];
   isPlaying: boolean;
+  currentTime?: number;
+  duration?: number;
   controllersCount: number;
   controllers: string[];
   host: string | null;

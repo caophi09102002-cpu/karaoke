@@ -98,6 +98,14 @@ Mọi lập trình viên hoặc AI Agent khi tham gia phát triển dự án nà
   - Đo độ trễ thời gian thực (**Ping**: ~15 - 35ms).
   - Tùy chọn Presentation API / Google Cast.
 - [x] **Trang Controller Standalone (`/controller`):** Hoạt động độc lập khi chưa kết nối phòng, cho phép chuẩn bị danh sách bài hát trước khi kết nối TV.
+- [x] **Khôi phục trạng thái & Chống mất bài khi F5 (State & Queue Persistence):**
+  * Server không còn xóa phòng tức thì khi ngắt kết nối tạm thời; lưu trữ đệm bền bỉ (`.karaoke_rooms_cache.json`) với chu kỳ dọn dẹp 6 giờ.
+  * Tự động lưu và khôi phục mốc thời gian phát (`currentTime`) của bài hát đang hát; TV Host tự động seek tiếp tục phát mượt mà sau khi F5.
+  * Thêm màn hình tương tác "Bấm vào đây để tiếp tục phát" khi trình duyệt chặn âm thanh tự động sau F5.
+- [x] **Phân quyền bài hát cá nhân (Song Ownership & Protection):**
+  * Khách có toàn quyền với bài do chính mình chọn: Xóa bài, Ưu tiên bài hát lên đầu (`prioritizeQueue`), Bỏ qua bài (`skip`) nếu bài đang phát là bài của mình.
+  * Khách khác không thể xóa hay can thiệp vào bài của người khác (hiển thị biểu tượng khóa bảo vệ 🔒).
+  * Chủ phòng (TV Host / Controller có mã PIN) giữ quyền tối cao trên toàn bộ danh sách bài.
 
 #### 3. Hạ tầng & Triển khai Cloud:
 - [x] Quản lý mã nguồn qua Git và đồng bộ tự động lên GitHub: `caophi09102002-cpu/karaoke`.
@@ -110,7 +118,6 @@ Mọi lập trình viên hoặc AI Agent khi tham gia phát triển dự án nà
 
 - [ ] **Tự động Reconnect thông minh:** Khi thiết bị di động bị khóa màn hình hoặc chuyển ứng dụng, tự động kết nối lại Socket và phục hồi vai trò Chủ phòng mà không cần tải lại trang.
 - [ ] **Tối ưu hóa UI Tablet / iPad:** Bổ sung giao diện 2 cột dành cho máy tính bảng chọn bài (dạng màn hình cảm ứng phòng Karaoke dịch vụ).
-- [ ] **Giám sát tải RAM Server:** Cập nhật cơ chế dọn dẹp các phòng không có hoạt động quá 2 giờ.
 
 ---
 
