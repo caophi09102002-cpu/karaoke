@@ -97,6 +97,7 @@ app.prepare().then(() => {
           host: room.host,
           vocalMuted: room.vocalMuted ?? false,
           pitchShift: room.pitchShift ?? 0,
+          settings: room.settings,
           adminSocketIds: room.adminSocketIds || [],
         }
       : {
@@ -111,6 +112,7 @@ app.prepare().then(() => {
           host: null,
           vocalMuted: false,
           pitchShift: 0,
+          settings: undefined,
           adminSocketIds: [],
         };
 
@@ -166,6 +168,20 @@ app.prepare().then(() => {
 
       // Register in in-memory state
       const result = roomManager.joinRoom(socket.id, roomId, role, pin);
+
+      if (!result.success || !result.room) {
+        const response: JoinRoomResponse = {
+          success: false,
+          message: result.message,
+          isRoomNotFound: result.isRoomNotFound,
+          role,
+        };
+        if (callback) callback(response);
+        socket.emit("room-joined", response);
+        socket.emit("server:error", { message: result.message });
+        return;
+      }
+
       const targetRoomId = result.room.roomId;
 
       // Join socket.io channel
@@ -196,6 +212,29 @@ app.prepare().then(() => {
     // Support both client:join-room and join-room
     socket.on("client:join-room", handleJoinRoom);
     socket.on("join-room", handleJoinRoom);
+
+    // Event: Close & Destroy Room (Host or Admin only)
+    socket.on(
+      "client:close-room",
+      (payload: { roomId: string; pin?: string }, callback?: (res: any) => void) => {
+        const { roomId, pin } = payload || {};
+        if (!roomId) return;
+
+        const result = roomManager.closeRoom(roomId, socket.id, pin);
+        if (result.success) {
+          console.log(`🔒 [Close Room] Room ${roomId} was officially closed by ${socket.id}`);
+          io.to(roomId).emit("server:room-closed", {
+            roomId,
+            reason: "TV Host đã đóng phòng và kết thúc buổi tiệc Karaoke.",
+          });
+          io.in(roomId).socketsLeave(roomId);
+          if (callback) callback({ success: true, message: result.message });
+        } else {
+          socket.emit("server:error", { message: result.message });
+          if (callback) callback({ success: false, message: result.message });
+        }
+      }
+    );
 
     // Event: Claim Admin via PIN
     socket.on(
@@ -260,15 +299,57 @@ app.prepare().then(() => {
       }
     });
 
-    // Queue Event: add-queue
+    // Queue Event: add-queue (With Fair Play checks)
     socket.on("client:add-queue", (payload: { roomId: string; item: import("./src/types/socket").QueueItem }) => {
       const { roomId, item } = payload || {};
       if (!roomId || !item) return;
-      const result = roomManager.addToQueue(roomId, item);
+      const result = roomManager.addToQueue(roomId, item, socket.id);
+      if (result.error) {
+        socket.emit("server:error", { message: result.error });
+        return;
+      }
       broadcastRoomState(roomId, result.room);
     });
 
-    // Queue Event: prioritize (Admin only)
+    // Room Settings Event: update-settings (Admin only)
+    socket.on(
+      "client:update-settings",
+      (payload: {
+        roomId: string;
+        settings: Partial<import("./src/types/socket").RoomSettings>;
+        pin?: string;
+      }) => {
+        const { roomId, settings, pin } = payload || {};
+        if (!roomId || !settings) return;
+
+        const result = roomManager.updateSettings(roomId, settings, socket.id, pin);
+        if (!result.success) {
+          socket.emit("server:error", {
+            message: result.error || "Không thể cập nhật cài đặt phòng!",
+          });
+          return;
+        }
+
+        if (result.room) {
+          broadcastRoomState(roomId, result.room);
+        }
+      }
+    );
+
+    // Scoring Event: TV Host broadcasts score result to all devices
+    socket.on(
+      "host:show-score",
+      (payload: {
+        roomId: string;
+        scoreResult: import("./src/types/socket").ScoreResult;
+      }) => {
+        const { roomId, scoreResult } = payload || {};
+        if (!roomId || !scoreResult) return;
+        console.log(`🏆 [Scoring] Room ${roomId}: Score ${scoreResult.score} - ${scoreResult.title}`);
+        io.to(roomId).emit("server:show-score", { roomId, scoreResult });
+      }
+    );
+
     // Queue Event: prioritize (Admin or Song Owner)
     socket.on(
       "client:prioritize",

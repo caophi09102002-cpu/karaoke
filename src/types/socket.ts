@@ -11,6 +11,19 @@ export interface QueueItem {
   userName?: string; // Tên hiển thị người đặt
 }
 
+export interface RoomSettings {
+  fairPlayEnabled: boolean; // Chế độ xếp hàng công bằng (chống bao sân)
+  maxQueuePerUser: number; // Số bài tối đa mỗi người đặt (mặc định 3)
+  scoringEnabled: boolean; // Bật / Tắt chấm điểm sau mỗi bài (mặc định true)
+}
+
+export interface ScoreResult {
+  score: number; // 85 - 100
+  title: string; // Tên danh hiệu hài hước
+  songTitle: string;
+  singerName: string;
+}
+
 export interface RoomState {
   roomId: string;
   hostPin: string; // Mã PIN quản trị 4 chữ số (vd: "1234")
@@ -26,6 +39,7 @@ export interface RoomState {
   duration?: number;
   vocalMuted?: boolean; // true = Beat only (Left channel cloned), false = Full Stereo
   pitchShift?: number; // -4 to +4 semitones (nửa cung)
+  settings?: RoomSettings;
 }
 
 export type ControllerRole = "admin" | "guest";
@@ -42,6 +56,7 @@ export interface JoinRoomPayload {
 export interface JoinRoomResponse {
   success: boolean;
   message?: string;
+  isRoomNotFound?: boolean;
   room?: RoomState;
   role?: UserRole;
   controllerRole?: ControllerRole;
@@ -58,6 +73,7 @@ export interface SyncStatePayload {
   controllersCount: number;
   controllers: string[];
   host: string | null;
+  settings?: RoomSettings;
   vocalMuted?: boolean;
   pitchShift?: number;
   adminSocketIds?: string[];

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, use, useMemo } from "react";
+import React, { useEffect, useState, use, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getSocket } from "@/lib/socket";
@@ -10,9 +10,12 @@ import {
   SyncStatePayload,
   ControlAction,
   CheerType,
+  RoomSettings,
+  ScoreResult,
 } from "@/types/socket";
 import CastButton, { CastStatus } from "@/components/CastButton";
 import CastDeviceModal from "@/components/CastDeviceModal";
+import PocketVideoMirror from "@/components/PocketVideoMirror";
 import { getDeviceName, saveRecentDevice } from "@/lib/cast-storage";
 import { YouTubeSearchResult } from "@/app/api/search-youtube/route";
 import KaraokeSeekBar from "@/components/KaraokeSeekBar";
@@ -28,6 +31,10 @@ import {
   extractAcronym,
   removeVietnameseTones,
 } from "@/lib/vietnamese-search";
+import {
+  CURATED_CATEGORIES,
+  CuratedSong,
+} from "@/lib/curated-playlists";
 import {
   Smartphone,
   Tv,
@@ -66,6 +73,15 @@ import {
   User,
   Edit3,
   ShieldCheck,
+  Sun,
+  Moon,
+  FileText,
+  Settings,
+  Trophy,
+  Award,
+  LogOut,
+  AlertTriangle,
+  AlertCircle,
 } from "lucide-react";
 
 interface ControllerPageProps {
@@ -133,6 +149,46 @@ function ControllerContent({ params }: ControllerPageProps) {
   // Audio DSP States (Tone Transpose & Stereo Vocal Splitter)
   const [vocalMuted, setVocalMuted] = useState(false);
   const [pitchShift, setPitchShift] = useState(0); // -4 to +4 semitones
+
+  // Room Settings (Mục 3: Fair Play queue limit & scoring toggle)
+  const [roomSettings, setRoomSettings] = useState<RoomSettings>({
+    fairPlayEnabled: false,
+    maxQueuePerUser: 2,
+    scoringEnabled: true,
+  });
+  const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
+  const [tempFairPlay, setTempFairPlay] = useState<boolean>(false);
+  const [tempMaxQueue, setTempMaxQueue] = useState<number>(2);
+
+  // Wake Lock Screen Keeping (Mục 5: Mặc định TẮT để tiết kiệm pin theo yêu cầu)
+  const [isWakeLockActive, setIsWakeLockActive] = useState<boolean>(false);
+  const wakeLockRef = useRef<any>(null);
+
+  // Room Closed & Lifecycle States (Phòng thật sự đã đóng hoặc không tồn tại)
+  const [isRoomClosed, setIsRoomClosed] = useState<boolean>(false);
+  const [roomClosedReason, setRoomClosedReason] = useState<string>("");
+
+  // Karaoke Scoring Celebration popup on phone (Mục 1)
+  const [scoreCelebration, setScoreCelebration] = useState<ScoreResult | null>(null);
+
+  // Pocket Video Mirror (Giải pháp 1.2: Màn hình phụ bỏ túi xem trực tiếp TV đã tắt tiếng)
+  const [showVideoMirror, setShowVideoMirror] = useState<boolean>(false);
+
+  // Handheld Synchronized Lyrics (Mục 2: Lời bài hát chạy trên điện thoại)
+  const [showLyricsModal, setShowLyricsModal] = useState<boolean>(false);
+  const [lyricsData, setLyricsData] = useState<{
+    title: string;
+    artist: string;
+    lines: Array<{ time: number; text: string }>;
+    isFallback?: boolean;
+  } | null>(null);
+  const [isLoadingLyrics, setIsLoadingLyrics] = useState<boolean>(false);
+  const [lyricsFontSize, setLyricsFontSize] = useState<number>(17);
+  const [currentTime, setCurrentTime] = useState<number>(0);
+  const lyricsContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Curated Playlist Category Filter (Mục 4)
+  const [selectedCategory, setSelectedCategory] = useState<string>("party_remix");
 
   // Favorites States (stored in phone localStorage)
   const [favorites, setFavorites] = useState<FavoriteSong[]>([]);
@@ -251,11 +307,14 @@ function ControllerContent({ params }: ControllerPageProps) {
 
     function onRoomJoined(res: {
       success: boolean;
-      room: RoomState;
-      role: string;
+      room?: RoomState;
+      role?: string;
       controllerRole?: "admin" | "guest";
+      isRoomNotFound?: boolean;
+      message?: string;
     }) {
       if (res.success && res.room) {
+        setIsRoomClosed(false);
         setHasJoined(true);
         setHostConnected(!!res.room.host);
         setControllersCount(res.room.controllers.length);
@@ -265,7 +324,33 @@ function ControllerContent({ params }: ControllerPageProps) {
         if (res.controllerRole) setControllerRole(res.controllerRole);
         if (typeof res.room.vocalMuted === "boolean") setVocalMuted(res.room.vocalMuted);
         if (typeof res.room.pitchShift === "number") setPitchShift(res.room.pitchShift);
+        if (res.room.settings) setRoomSettings(res.room.settings);
         saveRecentDevice(roomId, getDeviceName(roomId));
+      } else {
+        setHasJoined(false);
+        if (res.isRoomNotFound) {
+          setIsRoomClosed(true);
+          setRoomClosedReason(res.message || "Phòng hát này không tồn tại hoặc đã bị đóng bởi TV Host!");
+          try {
+            localStorage.removeItem("karaoke_last_room_id");
+            localStorage.removeItem(`karaoke_admin_pin_${roomId}`);
+          } catch (e) {}
+        } else {
+          showToast("⚠️ " + (res.message || "Không thể tham gia phòng"));
+        }
+      }
+    }
+
+    function onRoomClosed(data: { roomId: string; reason?: string }) {
+      if (data.roomId === roomId) {
+        console.warn(`[Controller] Room ${roomId} was officially closed.`);
+        setIsRoomClosed(true);
+        setHasJoined(false);
+        setRoomClosedReason(data.reason || "TV Host đã đóng phòng và kết thúc buổi tiệc Karaoke.");
+        try {
+          localStorage.removeItem("karaoke_last_room_id");
+          localStorage.removeItem(`karaoke_admin_pin_${roomId}`);
+        } catch (e) {}
       }
     }
 
@@ -283,6 +368,7 @@ function ControllerContent({ params }: ControllerPageProps) {
         }
         if (typeof payload.vocalMuted === "boolean") setVocalMuted(payload.vocalMuted);
         if (typeof payload.pitchShift === "number") setPitchShift(payload.pitchShift);
+        if (payload.settings) setRoomSettings(payload.settings);
       }
     }
 
@@ -300,6 +386,7 @@ function ControllerContent({ params }: ControllerPageProps) {
         }
         if (typeof data.room.vocalMuted === "boolean") setVocalMuted(data.room.vocalMuted);
         if (typeof data.room.pitchShift === "number") setPitchShift(data.room.pitchShift);
+        if (data.room.settings) setRoomSettings(data.room.settings);
       }
     }
 
@@ -318,6 +405,21 @@ function ControllerContent({ params }: ControllerPageProps) {
       showToast("⚠️ " + (data.message || "Hành động bị từ chối"));
     }
 
+    function onShowScore(data: { roomId: string; scoreResult: ScoreResult }) {
+      if (data.roomId === roomId && data.scoreResult) {
+        setScoreCelebration(data.scoreResult);
+        setTimeout(() => {
+          setScoreCelebration(null);
+        }, 6500);
+      }
+    }
+
+    function onTimeUpdate(data: { roomId: string; currentTime: number }) {
+      if (data.roomId === roomId && typeof data.currentTime === "number") {
+        setCurrentTime(data.currentTime);
+      }
+    }
+
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("room-joined", onRoomJoined);
@@ -325,6 +427,9 @@ function ControllerContent({ params }: ControllerPageProps) {
     socket.on("room-updated", onRoomUpdated);
     socket.on("server:role-updated", onRoleUpdated);
     socket.on("server:error", onServerError);
+    socket.on("server:show-score", onShowScore);
+    socket.on("host:time-update", onTimeUpdate);
+    socket.on("server:room-closed", onRoomClosed);
 
     if (socket.connected) {
       onConnect();
@@ -338,6 +443,9 @@ function ControllerContent({ params }: ControllerPageProps) {
       socket.off("room-updated", onRoomUpdated);
       socket.off("server:role-updated", onRoleUpdated);
       socket.off("server:error", onServerError);
+      socket.off("server:show-score", onShowScore);
+      socket.off("host:time-update", onTimeUpdate);
+      socket.off("server:room-closed", onRoomClosed);
     };
   }, [roomId, userName, userId]);
 
@@ -614,6 +722,175 @@ function ControllerContent({ params }: ControllerPageProps) {
     showToast(`🎵 ${label}`);
   };
 
+  // Wake Lock Screen Keeping (Mục 5: Bật/Tắt giữ sáng màn hình, mặc định TẮT)
+  const toggleWakeLock = async () => {
+    if (isWakeLockActive) {
+      if (wakeLockRef.current) {
+        try {
+          await wakeLockRef.current.release();
+        } catch (e) {}
+        wakeLockRef.current = null;
+      }
+      setIsWakeLockActive(false);
+      showToast("🌙 Đã tắt giữ sáng (Màn hình tự tắt tiết kiệm pin)");
+    } else {
+      try {
+        if (typeof navigator !== "undefined" && "wakeLock" in navigator) {
+          const lock = await (navigator as any).wakeLock.request("screen");
+          wakeLockRef.current = lock;
+          lock.addEventListener("release", () => {
+            setIsWakeLockActive(false);
+          });
+          setIsWakeLockActive(true);
+          showToast("☀️ Đã bật giữ sáng (Màn hình luôn bật)");
+        } else {
+          showToast("Trình duyệt không hỗ trợ giữ màn hình sáng");
+        }
+      } catch (err) {
+        console.warn("[Controller] WakeLock error:", err);
+        showToast("Không thể kích hoạt giữ màn hình sáng");
+      }
+    }
+  };
+
+  // Release WakeLock when component unmounts
+  useEffect(() => {
+    return () => {
+      if (wakeLockRef.current) {
+        try {
+          wakeLockRef.current.release();
+        } catch (e) {}
+      }
+    };
+  }, []);
+
+  // Room Settings Modal Handler (Mục 3: Fair Play & Admin Settings)
+  const handleOpenSettingsModal = () => {
+    setTempFairPlay(roomSettings.fairPlayEnabled);
+    setTempMaxQueue(roomSettings.maxQueuePerUser || 2);
+    setShowSettingsModal(true);
+  };
+
+  const handleSaveSettings = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (controllerRole !== "admin") {
+      showToast("🔒 Chỉ chủ phòng mới có quyền lưu cài đặt!");
+      return;
+    }
+    const socket = getSocket();
+    const updatedSettings: RoomSettings = {
+      fairPlayEnabled: tempFairPlay,
+      maxQueuePerUser: tempMaxQueue,
+      scoringEnabled: true,
+    };
+    socket.emit("client:update-settings", {
+      roomId,
+      settings: updatedSettings,
+      pin: adminPin || undefined,
+    });
+    setRoomSettings(updatedSettings);
+    setShowSettingsModal(false);
+    showToast("⚙️ Đã lưu cài đặt phòng thành công!");
+  };
+
+  // Close Room directly from Admin Controller
+  const handleCloseRoomFromController = () => {
+    if (
+      !confirm(
+        `Bạn có chắc chắn muốn ĐÓNG PHÒNG ${roomId} và kết thúc buổi tiệc? Toàn bộ danh sách bài hát sẽ bị xóa và ngắt kết nối các thiết bị.`
+      )
+    ) {
+      return;
+    }
+    const socket = getSocket();
+    const pin =
+      adminPin ||
+      (typeof window !== "undefined"
+        ? sessionStorage.getItem(`karaoke_admin_pin_${roomId}`) ||
+          localStorage.getItem(`karaoke_admin_pin_${roomId}`)
+        : undefined) ||
+      undefined;
+
+    socket.emit("client:close-room", { roomId, pin }, (res: any) => {
+      if (res?.success) {
+        setShowSettingsModal(false);
+        setIsRoomClosed(true);
+        setRoomClosedReason("Bạn (Chủ phòng VIP) đã chính thức đóng phòng hát.");
+      } else {
+        showToast("⚠️ " + (res?.message || "Không thể đóng phòng!"));
+      }
+    });
+  };
+
+  // Handheld Synchronized Lyrics Handlers (Mục 2)
+  const handleOpenLyrics = async () => {
+    if (!currentSong) {
+      showToast("Chưa có bài hát nào đang phát!");
+      return;
+    }
+    setShowLyricsModal(true);
+    setIsLoadingLyrics(true);
+    try {
+      const res = await fetch(
+        `/api/lyrics?title=${encodeURIComponent(currentSong.title)}&artist=${encodeURIComponent(
+          currentSong.artist || ""
+        )}`
+      );
+      const data = await res.json();
+      if (data?.lines) {
+        setLyricsData(data);
+      } else {
+        setLyricsData({
+          title: currentSong.title,
+          artist: currentSong.artist || "Karaoke Beat",
+          lines: [{ time: 0, text: "Chưa có dữ liệu lời cho bài hát này. Hãy cùng hát theo màn hình TV!" }],
+          isFallback: true,
+        });
+      }
+    } catch (err) {
+      console.error("[Controller] Fetch lyrics error:", err);
+      setLyricsData({
+        title: currentSong.title,
+        artist: currentSong.artist || "Karaoke Beat",
+        lines: [{ time: 0, text: "Không thể tải lời bài hát lúc này. Hãy nhìn màn hình TV để hát!" }],
+        isFallback: true,
+      });
+    } finally {
+      setIsLoadingLyrics(false);
+    }
+  };
+
+  // Re-fetch lyrics if current song changes while Lyrics Modal is open
+  useEffect(() => {
+    if (showLyricsModal && currentSong) {
+      handleOpenLyrics();
+    }
+  }, [currentSong?.id]);
+
+  // Compute active lyric line index based on currentTime
+  const activeLyricIndex = useMemo(() => {
+    if (!lyricsData || !lyricsData.lines || lyricsData.lines.length === 0) return -1;
+    let idx = -1;
+    for (let i = 0; i < lyricsData.lines.length; i++) {
+      if (currentTime >= lyricsData.lines[i].time) {
+        idx = i;
+      } else {
+        break;
+      }
+    }
+    return idx;
+  }, [lyricsData, currentTime]);
+
+  // Auto-scroll active lyric line into center view
+  useEffect(() => {
+    if (showLyricsModal && activeLyricIndex >= 0) {
+      const el = document.getElementById(`lyric-line-${activeLyricIndex}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  }, [activeLyricIndex, showLyricsModal]);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-rose-500 selection:text-white font-sans max-w-md mx-auto relative border-x border-slate-900 shadow-2xl pb-32">
       {/* Background Ambient Glow */}
@@ -651,8 +928,47 @@ function ControllerContent({ params }: ControllerPageProps) {
           </div>
         </div>
 
-        {/* Right Header Actions: Cast Button, Role Badge, Nickname */}
+        {/* Right Header Actions: WakeLock, Cast Button, Admin Settings, Role Badge, Nickname */}
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* WAKE LOCK TOGGLE (Mục 5: Giữ màn hình sáng - Mặc định TẮT tiết kiệm pin) */}
+          <button
+            onClick={toggleWakeLock}
+            className={`p-1.5 rounded-full border transition-all cursor-pointer flex items-center justify-center active:scale-90 ${
+              isWakeLockActive
+                ? "bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-sm shadow-amber-950/40"
+                : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
+            }`}
+            title={
+              isWakeLockActive
+                ? "Màn hình: LUÔN SÁNG (Bấm để tắt, cho phép khóa màn hình tiết kiệm pin)"
+                : "Màn hình: TỰ TẮT TIẾT KIỆM PIN (Bấm để giữ màn hình luôn sáng)"
+            }
+          >
+            {isWakeLockActive ? (
+              <Sun className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+            ) : (
+              <Moon className="w-3.5 h-3.5 text-slate-400" />
+            )}
+          </button>
+
+          {/* ADMIN SETTINGS BUTTON (Mục 3: Cài đặt Quản trị viên phòng) */}
+          {controllerRole === "admin" && (
+            <button
+              onClick={handleOpenSettingsModal}
+              className={`p-1.5 rounded-full border transition-all cursor-pointer relative flex items-center justify-center active:scale-90 ${
+                roomSettings.fairPlayEnabled
+                  ? "bg-purple-950/80 border-purple-500/70 text-purple-300 shadow-sm"
+                  : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
+              }`}
+              title="Cài đặt phòng & Chế độ Xếp hàng công bằng (Fair Play)"
+            >
+              <Settings className="w-3.5 h-3.5 text-slate-300" />
+              {roomSettings.fairPlayEnabled && (
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-purple-500 rounded-full animate-ping" />
+              )}
+            </button>
+          )}
+
           {/* CAST TO TV BUTTON (Header Variant) */}
           <CastButton
             variant="header"
@@ -718,8 +1034,49 @@ function ControllerContent({ params }: ControllerPageProps) {
             </span>
           </div>
 
-          {/* Quick Suggestions Tags (Including Acronym examples) */}
+          {/* =========================================================================
+              MỤC 4: DANH MỤC GỢI Ý CHỦ ĐỀ (Trending & Curated Playlists - 1-Chạm)
+             ========================================================================= */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-slate-300 font-bold px-1">
+              <span className="flex items-center gap-1.5">
+                <Flame className="w-4 h-4 text-orange-400" />
+                Danh mục gợi ý (1-Chạm không cần gõ):
+              </span>
+              <span className="text-[10px] text-purple-400 font-normal">Chạm để chọn ngay</span>
+            </div>
+
+            {/* Category Pills Slider */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none text-xs">
+              {CURATED_CATEGORIES.map((cat) => {
+                const isActive = selectedCategory === cat.id && !searchedKeyword;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategory(cat.id);
+                      setSearchResults([]);
+                      setSearchedKeyword("");
+                      setSearchQuery("");
+                    }}
+                    className={`px-3 py-1.5 rounded-full shrink-0 transition-all cursor-pointer flex items-center gap-1.5 font-semibold text-xs border active:scale-95 ${
+                      isActive
+                        ? "bg-gradient-to-r from-rose-600 to-purple-600 text-white border-transparent shadow-md shadow-rose-950/40"
+                        : "bg-slate-900/90 text-slate-300 border-slate-800 hover:border-slate-700 hover:text-white"
+                    }`}
+                  >
+                    <span>{cat.icon}</span>
+                    <span>{cat.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Quick Acronym Suggestions Tags */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+            <span className="text-[10px] text-slate-500 font-mono shrink-0 pl-1">Viết tắt:</span>
             {[
               { label: "cdns", full: "Cắt Đôi Nỗi Sầu" },
               { label: "nhnt", full: "Nơi Này Có Anh" },
@@ -739,15 +1096,15 @@ function ControllerContent({ params }: ControllerPageProps) {
                     .then((data) => setSearchResults(data.results || []))
                     .finally(() => setIsSearching(false));
                 }}
-                className="px-3 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-full text-slate-300 hover:text-white shrink-0 transition-colors cursor-pointer flex items-center gap-1"
+                className="px-2.5 py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-full text-slate-400 hover:text-white shrink-0 transition-colors cursor-pointer flex items-center gap-1 text-[11px]"
               >
                 <span className="font-mono text-rose-400 font-bold">{tag.label}</span>
-                <span className="text-[10px] text-slate-500">({tag.full})</span>
+                <span className="text-[9px] text-slate-500">({tag.full})</span>
               </button>
             ))}
           </div>
 
-          {/* Search Results List */}
+          {/* Search Results List OR Curated Playlist Songs */}
           <div className="space-y-3 pt-1">
             <div className="flex items-center justify-between text-xs text-slate-400 font-semibold px-1">
               <span>
@@ -756,9 +1113,26 @@ function ControllerContent({ params }: ControllerPageProps) {
                     Kết quả cho: <b className="text-white">&quot;{searchedKeyword}&quot;</b> ({searchResults.length})
                   </>
                 ) : (
-                  "Danh sách bài hát gợi ý:"
+                  <>
+                    Đang hiển thị:{" "}
+                    <b className="text-rose-400">
+                      {CURATED_CATEGORIES.find((c) => c.id === selectedCategory)?.name || "Gợi ý"}
+                    </b>
+                  </>
                 )}
               </span>
+              {searchedKeyword && (
+                <button
+                  onClick={() => {
+                    setSearchResults([]);
+                    setSearchedKeyword("");
+                    setSearchQuery("");
+                  }}
+                  className="text-[11px] text-purple-400 hover:text-purple-300 cursor-pointer"
+                >
+                  Xóa tìm kiếm
+                </button>
+              )}
             </div>
 
             {isSearching ? (
@@ -767,6 +1141,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                 <span>Đang tìm kiếm bài hát karaoke từ YouTube...</span>
               </div>
             ) : searchResults.length > 0 ? (
+              /* YouTube Search Results */
               <div className="space-y-3">
                 {searchResults.map((item) => {
                   const isAdded = addedIds.has(item.youtubeId);
@@ -864,11 +1239,94 @@ function ControllerContent({ params }: ControllerPageProps) {
                 })}
               </div>
             ) : (
-              <div className="p-8 bg-slate-900/40 border border-slate-800/60 rounded-2xl text-center space-y-2">
-                <Music className="w-8 h-8 text-slate-600 mx-auto" />
-                <div className="text-xs text-slate-400 font-medium">
-                  Hãy gõ tên bài hát hoặc viết tắt (VD: <span className="text-rose-400 font-bold">cdns</span>) và bấm Enter!
-                </div>
+              /* Curated Songs for Selected Category (1-Touch queuing) */
+              <div className="space-y-3">
+                {(CURATED_CATEGORIES.find((c) => c.id === selectedCategory)?.songs || []).map((song) => {
+                  const isAdded = addedIds.has(song.youtubeId);
+                  const isFav = favoriteIdSet.has(song.youtubeId);
+
+                  return (
+                    <div
+                      key={song.youtubeId}
+                      className="p-3 bg-slate-900/90 border border-slate-800/90 hover:border-slate-700 rounded-2xl shadow-md transition-all flex gap-3 backdrop-blur-sm relative"
+                    >
+                      {/* Video Thumbnail */}
+                      <div className="relative w-28 h-20 bg-slate-950 rounded-xl overflow-hidden shrink-0 border border-slate-800">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={song.thumbnail}
+                          alt={song.title}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                        {song.durationSec > 0 && (
+                          <span className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/85 text-[10px] font-mono text-white rounded">
+                            {Math.floor(song.durationSec / 60)}:{(song.durationSec % 60).toString().padStart(2, "0")}
+                          </span>
+                        )}
+
+                        {/* Favorite Heart Button over Thumbnail */}
+                        <button
+                          onClick={(e) => handleToggleFavorite(song, e)}
+                          title={isFav ? "Xóa khỏi Bài tủ" : "Lưu vào Bài tủ"}
+                          className="absolute top-1 left-1 p-1.5 bg-black/60 hover:bg-black/90 rounded-full transition-transform active:scale-125 cursor-pointer backdrop-blur-md"
+                        >
+                          <Heart
+                            className={`w-4 h-4 transition-colors ${
+                              isFav ? "fill-rose-500 text-rose-500" : "text-white/80 hover:text-rose-400"
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {/* Video Details & Action Buttons */}
+                      <div className="flex-1 flex flex-col justify-between overflow-hidden">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="text-xs font-bold text-white line-clamp-2 leading-tight">
+                              {song.title}
+                            </h4>
+                          </div>
+                          <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                            {song.artist}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-2">
+                          <button
+                            onClick={() => handleSelectSong(song, false)}
+                            className={`flex-1 py-1.5 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                              isAdded
+                                ? "bg-slate-800 text-slate-400 border border-slate-700"
+                                : "bg-gradient-to-r from-rose-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white shadow-md shadow-rose-950/40 active:scale-95"
+                            }`}
+                          >
+                            {isAdded ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>Đã thêm</span>
+                              </>
+                            ) : (
+                              <>
+                                <PlusCircle className="w-3.5 h-3.5" />
+                                <span>Chọn bài</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            onClick={() => handleSelectSong(song, true)}
+                            title="Ưu tiên bài này hát ngay sau bài hiện tại"
+                            className="py-1.5 px-2.5 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                          >
+                            <Zap className="w-3.5 h-3.5 text-purple-400" />
+                            <span>Ưu tiên</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1455,6 +1913,32 @@ function ControllerContent({ params }: ControllerPageProps) {
                 onClick={() => setShowCastModal(true)}
               />
 
+              {/* POCKET VIDEO MIRROR BUTTON (Giải pháp 1.2: Xem TV trực tiếp trên điện thoại) */}
+              <button
+                onClick={() => setShowVideoMirror(true)}
+                disabled={!currentSong}
+                className="relative p-2 bg-gradient-to-r from-purple-600/30 to-pink-600/30 hover:from-purple-600/45 hover:to-pink-600/45 border border-purple-500/50 text-purple-200 disabled:opacity-40 rounded-xl transition-all cursor-pointer flex items-center justify-center active:scale-95 shadow-sm shadow-purple-950/40"
+                title="Màn hình phụ bỏ túi: Xem trực tiếp video TV trên điện thoại (đã tắt tiếng)"
+              >
+                <Tv className="w-4 h-4 text-purple-300" />
+                {currentSong && isPlaying && (
+                  <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                )}
+              </button>
+
+              {/* LYRICS BUTTON (Mục 2: Xem lời bài hát chạy trên điện thoại) */}
+              <button
+                onClick={handleOpenLyrics}
+                disabled={!currentSong}
+                className="p-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 disabled:opacity-40 rounded-xl transition-all cursor-pointer flex items-center justify-center active:scale-95"
+                title="Xem lời bài hát chạy trên điện thoại"
+              >
+                <FileText className="w-4 h-4 text-purple-400" />
+              </button>
+
               {controllerRole === "admin" ? (
                 <>
                   <button
@@ -1773,6 +2257,341 @@ function ControllerContent({ params }: ControllerPageProps) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL: CÀI ĐẶT PHÒNG & XẾP HÀNG CÔNG BẰNG (Mục 3: Room Settings Modal)
+         ========================================================================= */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-purple-500/20 text-purple-400 rounded-xl">
+                  <Settings className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-bold text-white">Cài Đặt Phòng Karaoke</h3>
+              </div>
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSettings} className="space-y-4">
+              {/* Option 1: Chế độ Xếp hàng công bằng (Fair Play) */}
+              <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">⚖️</span>
+                    <div>
+                      <div className="text-xs font-bold text-white">Xếp hàng công bằng (Fair Play)</div>
+                      <div className="text-[10px] text-slate-400">Giới hạn số bài chờ mỗi người</div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTempFairPlay(!tempFairPlay)}
+                    className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 ease-in-out ${
+                      tempFairPlay ? "bg-purple-600 justify-end" : "bg-slate-800 justify-start"
+                    }`}
+                  >
+                    <div className="w-4 h-4 bg-white rounded-full shadow-md transform" />
+                  </button>
+                </div>
+
+                <p className="text-[10px] text-slate-400 leading-relaxed border-t border-slate-800/80 pt-1.5">
+                  💡 <b className="text-slate-300">Lưu ý:</b> Khi bật, mỗi người chỉ được giữ tối đa{" "}
+                  <b className="text-purple-400">{tempMaxQueue} bài</b> trong hàng đợi. Hệ thống sẽ{" "}
+                  <b className="text-amber-400">tự động tắt</b> nếu phòng chỉ có 1 hoặc 2 người để tránh gây phiền toái.
+                </p>
+              </div>
+
+              {/* Option 2: Giới hạn số bài (1 - 5 bài) */}
+              {tempFairPlay && (
+                <div className="space-y-1.5 px-1 animate-in fade-in duration-150">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-300 font-medium">Số bài tối đa mỗi người:</span>
+                    <span className="font-mono font-bold text-purple-400 px-2 py-0.5 rounded bg-purple-950 border border-purple-500/50">
+                      {tempMaxQueue} bài
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 pt-1">
+                    {[1, 2, 3, 4, 5].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setTempMaxQueue(num)}
+                        className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                          tempMaxQueue === num
+                            ? "bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-950/40"
+                            : "bg-slate-950 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white"
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Buttons */}
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowSettingsModal(false)}
+                  className="flex-1 py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 px-3 bg-gradient-to-r from-purple-600 to-rose-600 hover:from-purple-500 hover:to-rose-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-purple-900/30 cursor-pointer"
+                >
+                  Lưu Cài Đặt
+                </button>
+              </div>
+
+              {/* Danger Zone: Đóng phòng hát (Admin Only) */}
+              <div className="pt-2 border-t border-slate-800/80">
+                <button
+                  type="button"
+                  onClick={handleCloseRoomFromController}
+                  className="w-full py-2 px-3 bg-rose-950/30 hover:bg-rose-900/50 border border-rose-500/30 text-rose-300 hover:text-rose-200 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Đóng phòng & Kết thúc tiệc</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL: LỜI BÀI HÁT ĐỒNG BỘ TRÊN ĐIỆN THOẠI (Mục 2: Handheld Lyrics Modal)
+         ========================================================================= */}
+      {showLyricsModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col p-4 max-w-md mx-auto animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-full flex-1 bg-slate-950 border border-slate-800 rounded-3xl p-4 shadow-2xl flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800/80 shrink-0">
+              <div className="flex items-center gap-2.5 overflow-hidden">
+                <div className="p-2 bg-gradient-to-tr from-purple-600 to-rose-600 text-white rounded-xl shrink-0">
+                  <Mic2 className="w-4 h-4" />
+                </div>
+                <div className="overflow-hidden">
+                  <h3 className="text-xs font-bold text-white truncate">
+                    {lyricsData?.title || currentSong?.title || "Lời bài hát"}
+                  </h3>
+                  <p className="text-[10px] text-slate-400 truncate">
+                    {lyricsData?.artist || currentSong?.artist || "Đang phát trên TV"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 shrink-0">
+                {/* Switch to Video Mirror */}
+                <button
+                  onClick={() => {
+                    setShowLyricsModal(false);
+                    setShowVideoMirror(true);
+                  }}
+                  className="px-2 py-1 bg-purple-950/80 border border-purple-700/60 rounded-lg text-purple-300 text-[10px] font-bold hover:bg-purple-900 active:scale-95 flex items-center gap-1"
+                  title="Chuyển sang xem video trực tiếp trên điện thoại"
+                >
+                  <Tv className="w-3 h-3 text-purple-400" />
+                  <span>Xem Video</span>
+                </button>
+
+                {/* Font Size Adjusters */}
+                <button
+                  onClick={() => setLyricsFontSize((prev) => Math.max(13, prev - 2))}
+                  className="px-2 py-1 bg-slate-900 border border-slate-800 rounded-lg text-slate-300 text-[10px] font-bold hover:bg-slate-800 active:scale-95"
+                  title="Thu nhỏ chữ"
+                >
+                  A-
+                </button>
+                <button
+                  onClick={() => setLyricsFontSize((prev) => Math.min(24, prev + 2))}
+                  className="px-2 py-1 bg-slate-900 border border-slate-800 rounded-lg text-slate-300 text-[10px] font-bold hover:bg-slate-800 active:scale-95"
+                  title="Phóng to chữ"
+                >
+                  A+
+                </button>
+                <button
+                  onClick={() => setShowLyricsModal(false)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors ml-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Lyrics Content with Synchronized Auto-Scroll */}
+            <div
+              ref={lyricsContainerRef}
+              className="flex-1 overflow-y-auto py-6 px-2 space-y-4 text-center scroll-smooth scrollbar-none"
+            >
+              {isLoadingLyrics ? (
+                <div className="py-24 flex flex-col items-center justify-center gap-3 text-slate-400 text-xs">
+                  <Loader2 className="w-7 h-7 text-purple-500 animate-spin" />
+                  <span>Đang tải lời bài hát đồng bộ...</span>
+                </div>
+              ) : lyricsData && lyricsData.lines.length > 0 ? (
+                lyricsData.lines.map((line, idx) => {
+                  const isActive = idx === activeLyricIndex;
+                  return (
+                    <div
+                      key={idx}
+                      id={`lyric-line-${idx}`}
+                      className={`transition-all duration-300 rounded-xl px-3 py-1.5 ${
+                        isActive
+                          ? "font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-300 to-rose-400 scale-105 drop-shadow-[0_0_12px_rgba(250,204,21,0.6)] bg-white/5 border border-yellow-400/20"
+                          : idx < activeLyricIndex
+                          ? "text-slate-500 font-medium opacity-60"
+                          : "text-slate-300 font-semibold opacity-90"
+                      }`}
+                      style={{ fontSize: `${isActive ? lyricsFontSize + 2 : lyricsFontSize}px` }}
+                    >
+                      {line.text}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="py-24 text-slate-500 text-xs">
+                  Chưa có dữ liệu lời cho bài hát này. Hãy cùng hát theo màn hình TV!
+                </div>
+              )}
+            </div>
+
+            {/* Footer indicator */}
+            <div className="pt-2 border-t border-slate-800/80 text-[10px] text-slate-500 flex items-center justify-between shrink-0">
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Đồng bộ trực tiếp với TV
+              </span>
+              <span>Bấm A+/A- để chỉnh cỡ chữ</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL: THÔNG BÁO ĐIỂM SỐ KARAOKE TRÊN ĐIỆN THOẠI (Mục 1: Score Popup)
+         ========================================================================= */}
+      {scoreCelebration && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-full max-w-xs bg-gradient-to-b from-slate-900 to-purple-950 border border-amber-500/50 rounded-3xl p-6 shadow-2xl text-center space-y-4 relative select-none">
+            {/* Ambient gold glow */}
+            <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-32 h-32 bg-amber-500/30 rounded-full blur-2xl pointer-events-none" />
+
+            {/* Trophy Icon */}
+            <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-tr from-amber-600 via-yellow-400 to-amber-200 p-1 shadow-lg shadow-amber-500/30 flex items-center justify-center animate-bounce">
+              <div className="w-full h-full rounded-full bg-slate-950 flex items-center justify-center">
+                <Trophy className="w-10 h-10 text-yellow-400" />
+              </div>
+            </div>
+
+            {/* Song title & singer */}
+            <div>
+              <div className="text-[11px] text-amber-300 font-bold uppercase tracking-wider">
+                KẾT QUẢ BÀI HÁT
+              </div>
+              <h3 className="text-base font-black text-white truncate mt-0.5">
+                {scoreCelebration.songTitle}
+              </h3>
+              <p className="text-xs text-purple-300 mt-0.5">
+                Trình bày: <b className="text-yellow-300">{scoreCelebration.singerName}</b>
+              </p>
+            </div>
+
+            {/* Score Big Display */}
+            <div className="flex items-baseline justify-center gap-1.5 py-1">
+              <span className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 to-amber-400 font-mono drop-shadow">
+                {scoreCelebration.score}
+              </span>
+              <span className="text-lg font-bold text-amber-300/80">/ 100</span>
+            </div>
+
+            {/* Award Title Badge */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 text-xs font-bold text-amber-200 shadow">
+              <Award className="w-4 h-4 text-amber-300" />
+              <span>{scoreCelebration.title}</span>
+            </div>
+
+            {/* Close Button */}
+            <div className="pt-2">
+              <button
+                onClick={() => setScoreCelebration(null)}
+                className="w-full py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs rounded-xl shadow-lg transition active:scale-95"
+              >
+                Tuyệt vời! Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL / THEATER: POCKET VIDEO MIRROR (Giải pháp 1.2: Màn hình phụ bỏ túi)
+         ========================================================================= */}
+      <PocketVideoMirror
+        isOpen={showVideoMirror}
+        onClose={() => setShowVideoMirror(false)}
+        currentSong={currentSong}
+        isPlaying={isPlaying}
+        currentTime={currentTime}
+        onSendReaction={sendCheer}
+        onSwitchToLyrics={() => {
+          setShowVideoMirror(false);
+          handleOpenLyrics();
+        }}
+      />
+
+      {/* =========================================================================
+          ROOM CLOSED SCREEN (Khi phòng không tồn tại hoặc TV Host đã đóng phòng)
+         ========================================================================= */}
+      {isRoomClosed && (
+        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-6 text-center select-none animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-20 h-20 rounded-full bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-4 shadow-xl shadow-rose-950/40 animate-pulse">
+            <AlertCircle className="w-10 h-10" />
+          </div>
+
+          <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30 mb-2">
+            PHÒNG ĐÃ ĐÓNG
+          </span>
+
+          <h2 className="text-xl md:text-2xl font-black text-white mb-2">
+            Phòng Hát Đã Kết Thúc
+          </h2>
+
+          <p className="text-xs md:text-sm text-slate-300 max-w-xs mb-6 leading-relaxed">
+            {roomClosedReason || "TV Host đã đóng phòng hoặc mã phòng này không còn tồn tại trên máy chủ."}
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full max-w-xs">
+            <Link
+              href="/"
+              className="w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Về Trang Chủ</span>
+            </Link>
+
+            <button
+              onClick={() => {
+                setShowCastModal(true);
+              }}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-rose-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg shadow-purple-900/30 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+            >
+              <Tv className="w-4 h-4" />
+              <span>Kết Nối TV Khác</span>
+            </button>
           </div>
         </div>
       )}

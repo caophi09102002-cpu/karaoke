@@ -111,10 +111,23 @@ class RoomManager {
         currentTime: 0,
         vocalMuted: false,
         pitchShift: 0,
+        settings: {
+          fairPlayEnabled: false,
+          maxQueuePerUser: 3,
+          scoringEnabled: true,
+        },
       };
       this.rooms.set(normalizedId, room);
       this.persistRooms();
       console.log(`[RoomManager] Created new room: ${normalizedId} with Admin PIN: ${room.hostPin}`);
+    }
+
+    if (!room.settings) {
+      room.settings = {
+        fairPlayEnabled: false,
+        maxQueuePerUser: 3,
+        scoringEnabled: true,
+      };
     }
 
     return room;
@@ -185,6 +198,38 @@ class RoomManager {
   }
 
   /**
+   * Officially close and destroy a room (Host or Admin only).
+   * Removes from in-memory Map and clears from disk persistence.
+   */
+  public closeRoom(
+    rawRoomId: string,
+    senderSocketId: string,
+    providedPin?: string
+  ): { success: boolean; message: string; roomId: string } {
+    const normalizedId = rawRoomId.trim().toUpperCase();
+    const room = this.rooms.get(normalizedId);
+    if (!room) {
+      return { success: false, message: "Phòng không tồn tại hoặc đã được đóng trước đó.", roomId: normalizedId };
+    }
+
+    if (!this.isAdmin(normalizedId, senderSocketId, providedPin)) {
+      return { success: false, message: "Chỉ chủ phòng mới có quyền đóng phòng hát!", roomId: normalizedId };
+    }
+
+    // Clean up socketToRoom map for all sockets in this room
+    for (const [sId, meta] of this.socketToRoom.entries()) {
+      if (meta.roomId === normalizedId) {
+        this.socketToRoom.delete(sId);
+      }
+    }
+
+    this.rooms.delete(normalizedId);
+    this.persistRooms();
+    console.log(`🗑️ [RoomManager] Room ${normalizedId} was permanently closed and deleted.`);
+    return { success: true, message: `Phòng ${normalizedId} đã đóng thành công.`, roomId: normalizedId };
+  }
+
+  /**
    * Join a socket to a room as either host or controller
    */
   public joinRoom(
@@ -192,7 +237,14 @@ class RoomManager {
     rawRoomId: string,
     role: UserRole = "controller",
     pin?: string
-  ): { success: boolean; room: RoomState; role: UserRole; message: string; isAdmin: boolean } {
+  ): {
+    success: boolean;
+    room: RoomState | null;
+    role: UserRole;
+    message: string;
+    isAdmin: boolean;
+    isRoomNotFound?: boolean;
+  } {
     const roomId = rawRoomId.trim().toUpperCase();
 
     // If this socket was already in another room, leave it first
@@ -200,7 +252,26 @@ class RoomManager {
       this.leaveRoom(socketId);
     }
 
-    const room = this.getOrCreateRoom(roomId);
+    let room = this.rooms.get(roomId);
+
+    // If role is controller, DO NOT auto-create a non-existent room!
+    if (role === "controller" && !room) {
+      console.warn(
+        `⛔ [RoomManager] Controller ${socketId} attempted to join non-existent room: ${roomId}`
+      );
+      return {
+        success: false,
+        isRoomNotFound: true,
+        room: null,
+        role,
+        isAdmin: false,
+        message: "Phòng hát không tồn tại hoặc đã bị đóng bởi TV Host!",
+      };
+    }
+
+    if (!room) {
+      room = this.getOrCreateRoom(roomId);
+    }
     room.lastActiveAt = Date.now();
 
     let isUserAdmin = false;
@@ -319,13 +390,39 @@ class RoomManager {
   /**
    * Add a song to the room's queue.
    * If no song is currently playing, immediately set it as currentSong.
+   * Supports Fair Play limit if enabled by Host (only active when >= 3 controllers).
    */
   public addToQueue(
     rawRoomId: string,
-    item: import("../types/socket").QueueItem
-  ): { room: RoomState; isImmediatePlay: boolean } {
+    item: import("../types/socket").QueueItem,
+    senderSocketId?: string
+  ): { room: RoomState; isImmediatePlay: boolean; error?: string } {
     const room = this.getOrCreateRoom(rawRoomId);
     room.lastActiveAt = Date.now();
+
+    // Check Fair Play: Only when enabled AND >= 3 people in room AND user is not admin
+    const controllersCount = room.controllers.length;
+    const isSenderAdmin = senderSocketId ? this.isAdmin(rawRoomId, senderSocketId) : false;
+
+    if (
+      room.settings?.fairPlayEnabled &&
+      controllersCount >= 3 &&
+      item.userId &&
+      !isSenderAdmin
+    ) {
+      const userQueueCount = room.queue.filter((q) => q.userId === item.userId).length;
+      const maxAllowed = room.settings.maxQueuePerUser || 3;
+      if (userQueueCount >= maxAllowed) {
+        console.warn(
+          `⛔ [Fair Play] Blocked song addition for user ${item.userId}: reached max ${userQueueCount}/${maxAllowed}`
+        );
+        return {
+          room,
+          isImmediatePlay: false,
+          error: `Bạn đã đặt tối đa ${maxAllowed} bài trong hàng đợi. Vui lòng chờ bài của bạn được hát xong nhé!`,
+        };
+      }
+    }
 
     if (!room.currentSong) {
       room.currentSong = item;
@@ -342,6 +439,35 @@ class RoomManager {
       this.persistRooms();
       return { room, isImmediatePlay: false };
     }
+  }
+
+  /**
+   * Update room settings (Admin only)
+   */
+  public updateSettings(
+    rawRoomId: string,
+    newSettings: Partial<import("../types/socket").RoomSettings>,
+    senderSocketId: string,
+    providedPin?: string
+  ): { room: RoomState | null; success: boolean; error?: string } {
+    const room = this.getRoom(rawRoomId);
+    if (!room) return { room: null, success: false, error: "Phòng không tồn tại" };
+
+    if (!this.isAdmin(rawRoomId, senderSocketId, providedPin)) {
+      return { room, success: false, error: "Chỉ chủ phòng mới có quyền thay đổi cài đặt!" };
+    }
+
+    room.settings = {
+      fairPlayEnabled: false,
+      maxQueuePerUser: 3,
+      scoringEnabled: true,
+      ...(room.settings || {}),
+      ...newSettings,
+    };
+    room.lastActiveAt = Date.now();
+    this.persistRooms();
+    console.log(`[RoomManager] Room ${room.roomId} updated settings:`, room.settings);
+    return { room, success: true };
   }
 
   /**

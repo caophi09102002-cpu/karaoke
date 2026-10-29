@@ -1,4 +1,4 @@
-# 🎤 TÀI LIỆU ĐẶC TẢ DỰ ÁN & ROADMAP TÍNH NĂNG (PROJECT SPECIFICATION & ROADMAP)
+   # 🎤 TÀI LIỆU ĐẶC TẢ DỰ ÁN & ROADMAP TÍNH NĂNG (PROJECT SPECIFICATION & ROADMAP)
 > **Dự án:** Ứng dụng Karaoke Dual-Screen Thời gian thực (Real-time Dual-Screen Karaoke Platform)  
 > **Cập nhật lần cuối:** 28/10/2026  
 > **Tác giả:** caophi09102002-cpu  
@@ -98,6 +98,18 @@ Mọi lập trình viên hoặc AI Agent khi tham gia phát triển dự án nà
   - Đo độ trễ thời gian thực (**Ping**: ~15 - 35ms).
   - Tùy chọn Presentation API / Google Cast.
 - [x] **Trang Controller Standalone (`/controller`):** Hoạt động độc lập khi chưa kết nối phòng, cho phép chuẩn bị danh sách bài hát trước khi kết nối TV.
+- [x] **Màn hình phụ bỏ túi / Xem trực tiếp TV trên điện thoại (Pocket Video Mirroring - Muted):**
+  * Giải quyết triệt để bài toán người ngồi xa không nhìn rõ màn hình TV Host: Nhúng trực tiếp video YouTube đang chiếu lên điện thoại của từng khách hát.
+  * Tự động **TẮT TIẾNG (Muted 100%)** trên điện thoại: Âm thanh chỉ phát từ dàn loa/TV chính để loại trừ hoàn toàn nguy cơ hú loa hoặc trễ tiếng.
+  * Đồng bộ thời gian thực với TV Host (`host:time-update`): Tự động sửa lệch thời gian (Drift auto-correction) và đồng bộ trạng thái Play/Pause.
+  * Đa dạng chế độ xem: Chế độ Rạp chiếu mini (Theater Mode), Chế độ toàn màn hình xoay ngang (Landscape Fullscreen), và Chế độ khung nổi thu nhỏ (Floating Picture-in-Picture).
+  * Tích hợp thanh bắn hiệu ứng cổ vũ trực tiếp (👏, 🎉, 💖, 📣, 🔥) và nút chuyển đổi nhanh sang chế độ Teleprompter xem lời bài hát.
+  * Tự động giữ màn hình luôn sáng (Screen Wake Lock API) trong suốt thời gian xem.
+- [x] **Xử lý Đóng phòng thực tế & Chống phòng ma (Room Lifecycle & Official Close):**
+  * Nút "Đóng phòng" chính thức trên màn hình TV Host và trong Cài đặt Quản trị trên điện thoại có modal xác nhận giải tán phòng.
+  * Khi đóng phòng: Server xóa vĩnh viễn phòng khỏi RAM và file cache đệm, đồng thời phát sóng sự kiện `server:room-closed` đến toàn bộ thiết bị đang kết nối.
+  * Màn hình điện thoại hiển thị giao diện thông báo "Phòng hát đã kết thúc / TV Host đã đóng phòng" kèm 2 nút "Về Trang Chủ" và "Kết Nối TV Khác", đồng thời tự động dọn dẹp `localStorage` tránh bị kẹt phòng cũ khi F5.
+  * Ngăn chặn hoàn toàn việc Controller tự sinh "phòng ma" (Zombie Room): Điện thoại chỉ được phép gia nhập phòng đang tồn tại do Host tạo; nếu phòng không tồn tại hoặc đã đóng, lập tức báo lỗi chính xác thay vì đứng chờ vô thời hạn.
 - [x] **Khôi phục trạng thái & Chống mất bài khi F5 (State & Queue Persistence):**
   * Server không còn xóa phòng tức thì khi ngắt kết nối tạm thời; lưu trữ đệm bền bỉ (`.karaoke_rooms_cache.json`) với chu kỳ dọn dẹp 6 giờ.
   * Tự động lưu và khôi phục mốc thời gian phát (`currentTime`) của bài hát đang hát; TV Host tự động seek tiếp tục phát mượt mà sau khi F5.
@@ -169,6 +181,8 @@ Mọi lập trình viên hoặc AI Agent khi tham gia phát triển dự án nà
 | `client:send-reaction`| Client ➔ Server | `{ roomId, type: 'text'\|'emoji', content, senderName }` | Gửi hiệu ứng tương tác / chữ Danmaku bay lên TV. |
 | `client:claim-admin` | Client ➔ Server | `{ roomId, pin, userId }` | Nhập mã PIN 4 số để nâng quyền thành Chủ phòng VIP. |
 | `client:leave-room` | Client ➔ Server | `{ roomId }` | Ngắt kết nối và rời khỏi phòng hiện tại. |
+| `client:close-room` | Host/Admin ➔ Server | `{ roomId, pin }` | Đóng phòng vĩnh viễn, giải tán buổi tiệc và xóa hàng đợi. |
+| `server:room-closed`| Server ➔ Room | `{ roomId, reason }` | Thông báo phòng đã đóng, điều hướng toàn bộ khách về trang chủ. |
 | `ping` / `pong` | Hai chiều | `{ timestamp }` ➔ `{ latencyMs }` | Đo độ trễ kết nối thời gian thực. |
 
 ---

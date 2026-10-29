@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef, useCallback, use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { QRCodeSVG } from "qrcode.react";
 import { getSocket } from "@/lib/socket";
@@ -44,10 +45,28 @@ import {
   Eye,
   EyeOff,
   ShieldCheck,
+  Trophy,
+  Award,
+  ArrowRight,
+  LogOut,
+  AlertTriangle,
 } from "lucide-react";
 
 // Dynamically import react-youtube to avoid SSR issues
 const YouTube = dynamic(() => import("react-youtube"), { ssr: false });
+
+const SCORING_TITLES = [
+  "👑 Giọng Ca Vàng Trong Làng Giải Trí",
+  "🔥 Hát Cháy Cả Loa, Hàng Xóm Phải Tới Khen",
+  "💿 Hát Như Nuốt Đĩa, Chuẩn Từng Nốt Nhạc",
+  "⭐ Ca Sĩ Triển Vọng Của Xóm",
+  "🎤 Giọng Ca Oanh Vàng, Chim Nghe Đều Thao Thức",
+  "🍻 Hát Rất Đam Mê, Cho 10 Điểm Tinh Thần",
+  "👏 Đỉnh Cao Phong Độ, Nhận Tràng Pháo Tay",
+  "🚀 Nốt Cao Xuyên Lục Địa, Quá Đỉnh",
+  "💯 Idol Giới Trẻ, Giọng Ca Triệu View",
+  "🌟 Giọng Hát Ngọt Ngào, Rung Động Triệu Con Tim",
+];
 
 interface HostPageProps {
   params: Promise<{
@@ -90,6 +109,36 @@ function HostRoomContent({ params }: HostPageProps) {
   const [danmakuList, setDanmakuList] = useState<DanmakuMessage[]>([]);
   const laneIndexRef = useRef<number>(0);
 
+  // Karaoke Scoring & Smooth Fade-out States
+  const [scoreData, setScoreData] = useState<{
+    score: number;
+    displayScore: number;
+    title: string;
+    songTitle: string;
+    singerName: string;
+    countdown: number;
+  } | null>(null);
+  const [isFadingOut, setIsFadingOut] = useState<boolean>(false);
+  const scoreIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Close Room State
+  const router = useRouter();
+  const [showCloseConfirm, setShowCloseConfirm] = useState<boolean>(false);
+  const [isClosingRoom, setIsClosingRoom] = useState<boolean>(false);
+
+  // Handle Close Room (Host confirms end of karaoke party)
+  const handleCloseRoom = useCallback(() => {
+    setIsClosingRoom(true);
+    const socket = getSocket();
+    socket.emit("client:close-room", { roomId, pin: hostPin }, (res: any) => {
+      try {
+        localStorage.removeItem("karaoke_last_room_id");
+        localStorage.removeItem(`karaoke_admin_pin_${roomId}`);
+      } catch (e) {}
+      router.push("/");
+    });
+  }, [roomId, hostPin, router]);
+
   // Refs
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const ytPlayerRef = useRef<any>(null);
@@ -121,14 +170,125 @@ function HostRoomContent({ params }: HostPageProps) {
     }
   }, [roomId]);
 
-  // Handle Song Ended -> request next song from queue
-  const handleSongEnded = useCallback(() => {
-    console.log(`[Host] Video ended for song: ${currentSong?.title}`);
+  // Show scoring celebration and then trigger next song
+  const showScoringAndEnd = useCallback((finishedSong: QueueItem | null) => {
+    if (!finishedSong) {
+      const socket = getSocket();
+      socket.emit("client:song-ended", { roomId });
+      setCurrentTime(0);
+      setDuration(0);
+      return;
+    }
+
+    const isPerfect = Math.random() < 0.06;
+    const finalScore = isPerfect ? 100 : Math.floor(86 + Math.random() * 13);
+    const randomTitle = SCORING_TITLES[Math.floor(Math.random() * SCORING_TITLES.length)];
+
+    // Play fanfare and applause
+    soundEngine.playCheer();
+
+    const scoreResult = {
+      score: finalScore,
+      title: randomTitle,
+      songTitle: finishedSong.title,
+      singerName: finishedSong.requestedBy || "Ca sĩ bí ẩn",
+    };
+
+    // Broadcast score to server -> all controllers
+    const socket = getSocket();
+    socket.emit("host:show-score", { roomId, scoreResult });
+
+    setScoreData({
+      score: finalScore,
+      displayScore: 0,
+      title: randomTitle,
+      songTitle: finishedSong.title,
+      singerName: finishedSong.requestedBy || "Ca sĩ bí ẩn",
+      countdown: 6,
+    });
+
+    // Score roll up animation from 0 to finalScore
+    let currentVal = 0;
+    const step = Math.ceil(finalScore / 25);
+    const rollInterval = setInterval(() => {
+      currentVal += step;
+      if (currentVal >= finalScore) {
+        currentVal = finalScore;
+        clearInterval(rollInterval);
+      }
+      setScoreData((prev) => (prev ? { ...prev, displayScore: currentVal } : null));
+    }, 35);
+
+    // Countdown 6 seconds before advancing
+    let remaining = 6;
+    if (scoreIntervalRef.current) clearInterval(scoreIntervalRef.current);
+    scoreIntervalRef.current = setInterval(() => {
+      remaining -= 1;
+      setScoreData((prev) => (prev ? { ...prev, countdown: remaining } : null));
+      if (remaining <= 0) {
+        if (scoreIntervalRef.current) clearInterval(scoreIntervalRef.current);
+        setScoreData(null);
+        setIsFadingOut(false);
+        socket.emit("client:song-ended", { roomId });
+        setCurrentTime(0);
+        setDuration(0);
+      }
+    }, 1000);
+  }, [roomId]);
+
+  // Fast skip scoring screen
+  const skipScoringNow = useCallback(() => {
+    if (scoreIntervalRef.current) clearInterval(scoreIntervalRef.current);
+    setScoreData(null);
+    setIsFadingOut(false);
     const socket = getSocket();
     socket.emit("client:song-ended", { roomId });
     setCurrentTime(0);
     setDuration(0);
-  }, [roomId, currentSong?.title]);
+  }, [roomId]);
+
+  // Perform smooth volume fade out over 1.5s then trigger scoring
+  const performFadeOutAndEnd = useCallback(() => {
+    if (isFadingOut) return;
+    setIsFadingOut(true);
+
+    // Play gentle applause as fadeout begins
+    soundEngine.playApplause(2.0);
+
+    let steps = 15;
+    const stepInterval = 100;
+    const initialVol = videoRef.current ? videoRef.current.volume : 1;
+
+    const fadeTimer = setInterval(() => {
+      steps -= 1;
+      const factor = Math.max(0, steps / 15);
+      if (videoRef.current) {
+        videoRef.current.volume = initialVol * factor;
+      }
+      if (ytPlayerRef.current && typeof ytPlayerRef.current.setVolume === "function") {
+        ytPlayerRef.current.setVolume(Math.round(100 * factor));
+      }
+
+      if (steps <= 0) {
+        clearInterval(fadeTimer);
+        if (videoRef.current) {
+          videoRef.current.pause();
+          videoRef.current.volume = 1;
+        }
+        if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
+          ytPlayerRef.current.stopVideo();
+          ytPlayerRef.current.setVolume(100);
+        }
+        showScoringAndEnd(currentSongRef.current);
+      }
+    }, stepInterval);
+  }, [isFadingOut, showScoringAndEnd]);
+
+  // Natural song end (trigger scoring then advance)
+  const handleSongEnded = useCallback(() => {
+    console.log(`[Host] Video ended naturally for: ${currentSongRef.current?.title}`);
+    showScoringAndEnd(currentSongRef.current);
+  }, [showScoringAndEnd]);
 
   // Trigger floating cheer animation and sound
   const triggerCheerEffect = useCallback((type: CheerType = "applause") => {
@@ -334,7 +494,7 @@ function HostRoomContent({ params }: HostPageProps) {
           ytPlayerRef.current.pauseVideo();
         }
       } else if (cmd.action === "skip") {
-        handleSongEnded();
+        performFadeOutAndEnd();
       } else if (cmd.action === "volume" && typeof cmd.value === "number") {
         if (videoRef.current) {
           videoRef.current.volume = cmd.value / 100;
@@ -797,6 +957,16 @@ function HostRoomContent({ params }: HostPageProps) {
               <span className="font-mono font-bold text-white">{controllersCount}</span>
               <span className="text-slate-400 text-[11px]">điện thoại</span>
             </div>
+
+            {/* CLOSE ROOM BUTTON */}
+            <button
+              onClick={() => setShowCloseConfirm(true)}
+              className="flex items-center gap-1.5 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/60 text-rose-300 hover:text-white backdrop-blur-md px-3 py-1.5 rounded-xl text-xs font-semibold transition active:scale-95 shadow-md shadow-rose-950/30 cursor-pointer pointer-events-auto"
+              title="Đóng phòng & Kết thúc buổi tiệc"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Đóng phòng</span>
+            </button>
           </div>
 
           {/* Top Center / Right: Current Playing Song Banner + Audio Status */}
@@ -946,6 +1116,127 @@ function HostRoomContent({ params }: HostPageProps) {
             </div>
           ))}
         </div>
+
+        {/* =========================================================================
+            6. FADING OUT INDICATOR
+           ========================================================================= */}
+        {isFadingOut && !scoreData && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-black/80 backdrop-blur-md border border-amber-500/40 px-8 py-5 rounded-2xl flex items-center gap-4 text-white shadow-2xl animate-pulse">
+            <div className="w-8 h-8 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
+            <div>
+              <p className="text-xl font-bold text-amber-300">Đang hoàn tất bài hát... 👏</p>
+              <p className="text-xs text-slate-300">Chuẩn bị công bố điểm số</p>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================================
+            7. KARAOKE SCORING CELEBRATION OVERLAY (Mục 1 & 6)
+           ========================================================================= */}
+        {scoreData && (
+          <div className="absolute inset-0 z-50 bg-gradient-to-b from-slate-950/95 via-purple-950/90 to-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in-95 duration-300 select-none">
+            {/* Ambient Background Glow */}
+            <div className="absolute w-96 h-96 bg-amber-500/20 rounded-full blur-3xl pointer-events-none -top-10" />
+            <div className="absolute w-80 h-80 bg-fuchsia-600/20 rounded-full blur-3xl pointer-events-none -bottom-10" />
+
+            {/* Trophy & Badge */}
+            <div className="relative mb-4">
+              <div className="w-28 h-28 md:w-36 md:h-36 rounded-full bg-gradient-to-tr from-amber-600 via-yellow-400 to-amber-200 p-1 shadow-[0_0_50px_rgba(245,158,11,0.5)] flex items-center justify-center animate-bounce">
+                <div className="w-full h-full rounded-full bg-slate-950/80 flex items-center justify-center">
+                  <Trophy className="w-14 h-14 md:w-18 md:h-18 text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)]" />
+                </div>
+              </div>
+              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 bg-gradient-to-r from-pink-500 to-purple-600 rounded-full text-white text-xs font-black tracking-wider uppercase border border-white/20 shadow-lg whitespace-nowrap">
+                KARAOKE SCORE
+              </div>
+            </div>
+
+            {/* Song title & Singer */}
+            <h2 className="text-2xl md:text-4xl font-black text-white drop-shadow-md max-w-2xl truncate mb-1">
+              {scoreData.songTitle}
+            </h2>
+            <p className="text-sm md:text-base text-purple-200/90 font-medium mb-6 flex items-center gap-2">
+              <span>Trình bày:</span>
+              <span className="font-bold text-yellow-300 px-2 py-0.5 rounded-md bg-yellow-400/10 border border-yellow-400/30">
+                {scoreData.singerName}
+              </span>
+            </p>
+
+            {/* Large Animated Score Number */}
+            <div className="flex items-baseline justify-center gap-2 mb-4">
+              <span className="text-7xl md:text-9xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 via-amber-400 to-orange-500 drop-shadow-[0_10px_25px_rgba(245,158,11,0.6)] font-mono">
+                {scoreData.displayScore}
+              </span>
+              <span className="text-2xl md:text-4xl font-extrabold text-amber-300/80">/ 100</span>
+            </div>
+
+            {/* Award Title Badge */}
+            <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 shadow-xl mb-8">
+              <Award className="w-5 h-5 text-amber-300" />
+              <span className="text-base md:text-lg font-bold text-amber-200">
+                {scoreData.title}
+              </span>
+            </div>
+
+            {/* Footer Skip & Countdown */}
+            <div className="flex items-center gap-4">
+              <button
+                onClick={skipScoringNow}
+                className="pointer-events-auto px-6 py-2.5 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-sm shadow-lg shadow-purple-600/30 flex items-center gap-2 transition active:scale-95"
+              >
+                <span>Chuyển bài ngay</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+              <span className="text-xs text-slate-400">
+                Tự chuyển bài sau {scoreData.countdown}s...
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================================
+            8. MODAL: XÁC NHẬN ĐÓNG PHÒNG VÀ KẾT THÚC BUỔI TIỆC
+           ========================================================================= */}
+        {showCloseConfirm && (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200 select-none pointer-events-auto">
+            <div className="w-full max-w-md bg-gradient-to-b from-slate-900 to-rose-950/40 border border-rose-500/40 rounded-3xl p-6 shadow-2xl text-center space-y-4">
+              <div className="w-16 h-16 mx-auto rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400">
+                <AlertTriangle className="w-8 h-8" />
+              </div>
+
+              <div>
+                <h3 className="text-xl font-black text-white">Đóng Phòng & Kết Thúc Tiệc?</h3>
+                <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+                  Bạn có chắc chắn muốn giải tán phòng <b className="text-rose-400 font-mono text-sm">{roomId}</b>? Toàn bộ danh sách bài hát sẽ được xóa và ngắt kết nối tất cả điện thoại của khách.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={() => setShowCloseConfirm(false)}
+                  disabled={isClosingRoom}
+                  className="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  onClick={handleCloseRoom}
+                  disabled={isClosingRoom}
+                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold text-xs shadow-lg shadow-rose-600/40 transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {isClosingRoom ? (
+                    <span>Đang đóng...</span>
+                  ) : (
+                    <>
+                      <LogOut className="w-4 h-4" />
+                      <span>Xác nhận đóng phòng</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

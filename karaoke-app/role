@@ -1,0 +1,50 @@
+# VAI TRÒ & MỤC TIÊU
+Bạn là một Fullstack Tech Lead. Hãy khởi tạo và xây dựng một ứng dụng Karaoke hai màn hình (Dual-screen Web App) chạy theo thời gian thực (Real-time).
+
+# KIẾN TRÚC HỆ THỐNG
+1. Tech Stack đề xuất:
+   - Frontend & Backend: Next.js (App Router), TypeScript, Tailwind CSS, Lucide Icons.
+   - Real-time Sync: Socket.io (hoặc WebSocket).
+   - Audio/Video Engine: HTML5 Video Player kết hợp YouTube IFrame API / Custom Stream Wrapper.
+   - Database / State: In-memory store (hoặc SQLite/Supabase) để quản lý Room và Queue.
+
+2. Mô hình hoạt động (Two-Screen Architecture):
+   - Màn hình Host (URL: `/room/[roomId]/host`):
+     * Dành cho TV hoặc màn hình lớn.
+     * Chỉ hiển thị video karaoke, thanh thông báo bài tiếp theo ở góc màn hình, mã QR/PIN code khi ở chế độ chờ.
+     * Không có thanh điều khiển Play/Pause/Seek trên màn hình này (mọi điều khiển nhận từ xa qua Socket).
+     * Phát âm thanh và video.
+
+   - Màn hình Controller (URL: `/room/[roomId]/controller`):
+     * Giao diện tối ưu 100% cho điện thoại di động (Mobile-first Web App).
+     * Tính năng: Ô tìm kiếm bài hát (hỗ trợ tìm viết tắt chữ cái đầu), danh sách bài đang chờ (Queue), nút Ưu tiên (Play Next), Hát ngay (Play Now), Bỏ qua (Skip), Tạm dừng (Pause/Resume).
+     * Bảng âm thanh hiệu ứng (Soundboard): Nút bấm phát tiếng vỗ tay, huýt sáo, reo hò gửi tín hiệu về TV.
+
+# ĐẶC TẢ DỮ LIỆU & SỰ KIỆN WEBSOCKET
+
+1. Cấu trúc bài hát trong hàng đợi (Queue Item):
+   interface QueueItem {
+     id: string;
+     title: string;
+     artist: string;
+     duration: number;
+     source: 'local' | 'youtube';
+     url?: string;
+     youtubeId?: string;
+     requestedBy: string;
+   }
+
+2. Danh sách Socket Events cần thiết:
+   - `client:join-room` { roomId, role: 'host' | 'controller' }
+   - `client:add-queue` { roomId, item: QueueItem }
+   - `client:prioritize` { roomId, itemId }
+   - `client:remove-queue` { roomId, itemId }
+   - `client:control` { roomId, action: 'play' | 'pause' | 'skip' | 'volume' | 'mute-vocal', value?: any }
+   - `client:cheer-sound` { roomId, type: 'applause' | 'whistle' | 'cheer' }
+   - `server:sync-state` { currentSong: QueueItem | null, queue: QueueItem[], isPlaying: boolean }
+
+# CÁC BƯỚC THỰC HIỆN (YÊU CẦU XÂY DỰNG THEO TỪNG PHASE)
+Phase 1: Dựng hạ tầng kết nối Socket Server và logic tạo mã phòng (Room ID ngẫu nhiên 6 ký tự) kèm tạo mã QR Code để điện thoại quét vào thẳng URL controller.
+Phase 2: Dựng màn hình Host (`/host`) có Player tự động chuyển bài khi hết video và hiển thị Overlay thông tin bài kế tiếp.
+Phase 3: Dựng giao diện Mobile Controller (`/controller`) với tab "Tìm bài", "Hàng đợi" và thanh điều khiển dưới đáy màn hình (Bottom Navigation Bar).
+Phase 4: Tích hợp nguồn phát Hybrid (Cho phép paste link/ID YouTube vào hàng đợi hoặc chọn từ danh sách mẫu có sẵn).
