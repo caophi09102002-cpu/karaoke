@@ -1311,7 +1311,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                 value={favoriteSearchQuery}
                 onChange={(e) => setFavoriteSearchQuery(e.target.value)}
                 placeholder="Lọc bài tủ theo tên hoặc viết tắt..."
-                className="w-full bg-zinc-900/60 border border-white/[0.08] focus:border-white/30 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none transition-colors"
+                className="w-full bg-zinc-900/60 border border-white/[0.08] focus:border-white/30 rounded-xl pl-9 pr-8 py-2 text-[16px] md:text-xs text-white placeholder-zinc-500 focus:outline-none transition-colors"
               />
               {favoriteSearchQuery && (
                 <button
@@ -1573,7 +1573,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                   value={reactionText}
                   onChange={(e) => setReactionText(e.target.value)}
                   placeholder="Nhập lời cổ vũ (vd: Hát hay quá idol ơi!)..."
-                  className="w-full bg-zinc-950 border border-white/[0.08] focus:border-white/30 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 outline-none pr-14 transition-colors"
+                  className="w-full bg-zinc-950 border border-white/[0.08] focus:border-white/30 rounded-xl px-3.5 py-2.5 text-[16px] md:text-xs text-white placeholder-zinc-500 outline-none pr-14 transition-colors"
                 />
                 <span
                   className={`absolute right-3 top-2.5 text-[10px] font-mono ${
@@ -1591,7 +1591,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                   value={senderName}
                   onChange={(e) => setSenderName(e.target.value)}
                   placeholder="Tên của bạn"
-                  className="w-28 bg-zinc-950 border border-white/[0.08] rounded-xl px-2.5 py-2 text-xs text-zinc-200 placeholder-zinc-500 outline-none focus:border-white/30"
+                  className="w-28 bg-zinc-950 border border-white/[0.08] rounded-xl px-2.5 py-2 text-[16px] md:text-xs text-zinc-200 placeholder-zinc-500 outline-none focus:border-white/30"
                 />
                 <button
                   type="submit"
@@ -2209,7 +2209,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
                   placeholder="Nhập tên của bạn..."
-                  className="w-full text-center text-sm font-medium py-2.5 px-3 bg-zinc-950 border border-white/[0.1] focus:border-white/40 rounded-xl text-white outline-none transition-colors"
+                  className="w-full text-center text-[16px] md:text-sm font-medium py-2.5 px-3 bg-zinc-950 border border-white/[0.1] focus:border-white/40 rounded-xl text-white outline-none transition-colors"
                 />
               </div>
 

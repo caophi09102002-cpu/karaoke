@@ -165,7 +165,7 @@ export default function HomePage() {
                     onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                     placeholder="Mã phòng (VD: KARA88)"
                     maxLength={10}
-                    className="w-full bg-zinc-950/80 border border-white/[0.12] focus:border-red-500/80 rounded-2xl pl-10 pr-3 py-3.5 text-sm font-mono tracking-wider text-white uppercase placeholder:text-zinc-500 placeholder:normal-case placeholder:tracking-normal focus:outline-none transition-colors backdrop-blur-md"
+                    className="w-full bg-zinc-950/80 border border-white/[0.12] focus:border-red-500/80 rounded-2xl pl-10 pr-3 py-3.5 text-[16px] md:text-sm font-mono tracking-wider text-white uppercase placeholder:text-zinc-500 placeholder:normal-case placeholder:tracking-normal focus:outline-none transition-colors backdrop-blur-md"
                   />
                 </div>
                 <button

@@ -199,7 +199,7 @@ export default function SearchBarWithAutocomplete({
           placeholder={placeholder}
           autoComplete="off"
           spellCheck="false"
-          className="w-full bg-zinc-900/90 border border-white/[0.08] focus:border-zinc-400 rounded-xl pl-10 pr-20 py-3 text-sm text-white placeholder-zinc-500 focus:outline-none transition-colors shadow-lg shadow-black/20"
+          className="w-full bg-zinc-900/90 border border-white/[0.08] focus:border-zinc-400 rounded-xl pl-10 pr-20 py-3 text-[16px] md:text-sm text-white placeholder-zinc-500 focus:outline-none transition-colors shadow-lg shadow-black/20"
         />
 
         {/* Right Buttons: Clear "X" and "Tìm" button */}
