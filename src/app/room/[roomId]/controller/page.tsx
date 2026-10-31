@@ -489,6 +489,7 @@ function ControllerContent({ params }: ControllerPageProps) {
 
     setIsSearching(true);
     setSearchedKeyword(query);
+    setSelectedCategory("");
 
     try {
       const res = await fetch(`/api/search-youtube?q=${encodeURIComponent(query)}`);
@@ -1058,7 +1059,7 @@ function ControllerContent({ params }: ControllerPageProps) {
             {/* Category Pills Slider */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none text-xs">
               {CURATED_CATEGORIES.map((cat) => {
-                const isActive = selectedCategory === cat.id && !searchedKeyword;
+                const isActive = selectedCategory === cat.id;
                 return (
                   <button
                     key={cat.id}
@@ -1066,12 +1067,27 @@ function ControllerContent({ params }: ControllerPageProps) {
                     onClick={() => {
                       if (selectedCategory === cat.id) {
                         setSelectedCategory("");
+                        setSearchResults([]);
+                        setSearchedKeyword("");
+                        setSearchQuery("");
                       } else {
                         setSelectedCategory(cat.id);
+                        setSearchedKeyword(cat.name);
+                        setSearchQuery(cat.name);
+                        setIsSearching(true);
+                        fetch(`/api/search-youtube?q=${encodeURIComponent(cat.searchQuery)}`)
+                          .then((res) => res.json())
+                          .then((data) => {
+                            setSearchResults(data.results || []);
+                          })
+                          .catch((err) => {
+                            console.error("[Controller] Category search error:", err);
+                            showToast("Lỗi tìm kiếm thể loại, vui lòng thử lại!");
+                          })
+                          .finally(() => {
+                            setIsSearching(false);
+                          });
                       }
-                      setSearchResults([]);
-                      setSearchedKeyword("");
-                      setSearchQuery("");
                     }}
                     className={`px-3 py-1.5 rounded-full shrink-0 transition-all cursor-pointer flex items-center gap-1.5 font-medium text-xs active:scale-95 ${
                       isActive
@@ -1101,6 +1117,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                 key={tag.label}
                 type="button"
                 onClick={() => {
+                  setSelectedCategory("");
                   setSearchQuery(tag.label);
                   setIsSearching(true);
                   setSearchedKeyword(tag.label);
@@ -1117,21 +1134,22 @@ function ControllerContent({ params }: ControllerPageProps) {
             ))}
           </div>
 
-          {/* Search Results List OR Curated Playlist Songs OR Clean Empty State */}
+          {/* Search Results List OR Clean Empty State */}
           <div className="space-y-3 pt-1">
             {(searchedKeyword || selectedCategory) && (
               <div className="flex items-center justify-between text-xs text-zinc-400 font-medium px-1">
                 <span>
-                  {searchedKeyword ? (
+                  {selectedCategory ? (
                     <>
-                      Kết quả cho: <b className="text-white">&quot;{searchedKeyword}&quot;</b> ({searchResults.length})
+                      Thể loại:{" "}
+                      <b className="text-white">
+                        {CURATED_CATEGORIES.find((c) => c.id === selectedCategory)?.name}
+                      </b>{" "}
+                      ({searchResults.length} bài)
                     </>
                   ) : (
                     <>
-                      Danh mục:{" "}
-                      <b className="text-white">
-                        {CURATED_CATEGORIES.find((c) => c.id === selectedCategory)?.name || "Gợi ý"}
-                      </b>
+                      Kết quả cho: <b className="text-white">&quot;{searchedKeyword}&quot;</b> ({searchResults.length})
                     </>
                   )}
                 </span>
@@ -1237,94 +1255,6 @@ function ControllerContent({ params }: ControllerPageProps) {
 
                           <button
                             onClick={() => handleSelectSong(item, true)}
-                            title="Ưu tiên bài này hát ngay sau bài hiện tại"
-                            className="py-1.5 px-2.5 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-200 rounded-xl text-xs font-medium flex items-center gap-1 transition-all cursor-pointer active:scale-95"
-                          >
-                            <Zap className="w-3.5 h-3.5 text-amber-400" />
-                            <span>Ưu tiên</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : selectedCategory ? (
-              /* Curated Songs for Selected Category (1-Touch queuing) */
-              <div className="space-y-2.5">
-                {(CURATED_CATEGORIES.find((c) => c.id === selectedCategory)?.songs || []).map((song) => {
-                  const isAdded = addedIds.has(song.youtubeId);
-                  const isFav = favoriteIdSet.has(song.youtubeId);
-
-                  return (
-                    <div
-                      key={song.youtubeId}
-                      className="p-3 bg-zinc-900/50 hover:bg-zinc-900/80 border border-white/[0.06] hover:border-white/[0.12] rounded-2xl shadow-sm transition-all flex gap-3 backdrop-blur-sm relative"
-                    >
-                      {/* Video Thumbnail */}
-                      <div className="relative w-28 h-20 bg-zinc-950 rounded-xl overflow-hidden shrink-0 border border-white/[0.08]">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={song.thumbnail}
-                          alt={song.title}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                        {song.durationSec > 0 && (
-                          <span className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/85 text-[10px] font-mono text-white rounded">
-                            {Math.floor(song.durationSec / 60)}:{(song.durationSec % 60).toString().padStart(2, "0")}
-                          </span>
-                        )}
-
-                        {/* Favorite Heart Button over Thumbnail */}
-                        <button
-                          onClick={(e) => handleToggleFavorite(song, e)}
-                          title={isFav ? "Xóa khỏi Bài tủ" : "Lưu vào Bài tủ"}
-                          className="absolute top-1 left-1 p-1.5 bg-black/60 hover:bg-black/90 rounded-full transition-transform active:scale-125 cursor-pointer backdrop-blur-md"
-                        >
-                          <Heart
-                            className={`w-3.5 h-3.5 transition-colors ${
-                              isFav ? "fill-rose-500 text-rose-500" : "text-white/80 hover:text-rose-400"
-                            }`}
-                          />
-                        </button>
-                      </div>
-
-                      {/* Video Details & Action Buttons */}
-                      <div className="flex-1 flex flex-col justify-between overflow-hidden">
-                        <div>
-                          <h4 className="text-xs font-semibold text-white line-clamp-2 leading-tight">
-                            {song.title}
-                          </h4>
-                          <p className="text-[11px] text-zinc-400 truncate mt-0.5 font-normal">
-                            {song.artist}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-2 pt-2">
-                          <button
-                            onClick={() => handleSelectSong(song, false)}
-                            className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                              isAdded
-                                ? "bg-zinc-800 text-zinc-400 border border-white/[0.08]"
-                                : "bg-white hover:bg-zinc-200 text-zinc-950 shadow-sm active:scale-95"
-                            }`}
-                          >
-                            {isAdded ? (
-                              <>
-                                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                <span>Đã thêm</span>
-                              </>
-                            ) : (
-                              <>
-                                <PlusCircle className="w-3.5 h-3.5" />
-                                <span>Chọn bài</span>
-                              </>
-                            )}
-                          </button>
-
-                          <button
-                            onClick={() => handleSelectSong(song, true)}
                             title="Ưu tiên bài này hát ngay sau bài hiện tại"
                             className="py-1.5 px-2.5 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-200 rounded-xl text-xs font-medium flex items-center gap-1 transition-all cursor-pointer active:scale-95"
                           >

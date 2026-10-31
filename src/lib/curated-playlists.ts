@@ -11,7 +11,8 @@ export interface CuratedCategory {
   name: string;
   icon: string;
   description: string;
-  songs: CuratedSong[];
+  searchQuery: string;
+  songs?: CuratedSong[];
 }
 
 export const CURATED_CATEGORIES: CuratedCategory[] = [
@@ -20,6 +21,7 @@ export const CURATED_CATEGORIES: CuratedCategory[] = [
     name: "Quẩy Tiệc Tùng",
     icon: "🔥",
     description: "Nhạc trẻ remix bốc lửa, quẩy tung nóc nhà",
+    searchQuery: "karaoke remix quẩy tiệc tùng",
     songs: [
       {
         youtubeId: "fn3KQh6WbH4",
@@ -63,6 +65,7 @@ export const CURATED_CATEGORIES: CuratedCategory[] = [
     name: "Bolero Bất Hủ",
     icon: "🌹",
     description: "Những tình khúc quê hương trữ tình sâu lắng",
+    searchQuery: "karaoke bolero trữ tình",
     songs: [
       {
         youtubeId: "14bF9eQZfio",
@@ -106,6 +109,7 @@ export const CURATED_CATEGORIES: CuratedCategory[] = [
     name: "Nhạc Trẻ Hot Hit",
     icon: "⚡",
     description: "Các bản hit triệu view thịnh hành nhất",
+    searchQuery: "karaoke nhạc trẻ hot hit",
     songs: [
       {
         youtubeId: "Wn1Tf2p3Q8s",
@@ -149,6 +153,7 @@ export const CURATED_CATEGORIES: CuratedCategory[] = [
     name: "Song Ca Nam Nữ",
     icon: "👫",
     description: "Song ca ngọt ngào, kết nối cặp đôi",
+    searchQuery: "karaoke song ca nam nữ",
     songs: [
       {
         youtubeId: "5bF3m8W0qY4",
@@ -185,6 +190,7 @@ export const CURATED_CATEGORIES: CuratedCategory[] = [
     name: "Tiệc Cưới & Ngày Vui",
     icon: "🎉",
     description: "Không khí tưng bừng, hân hoan chúc phúc",
+    searchQuery: "karaoke nhạc đám cưới vui nhộn",
     songs: [
       {
         youtubeId: "2jL9m4W0qY8",
