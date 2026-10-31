@@ -100,13 +100,13 @@ export default function HomePage() {
             <div className="absolute top-28 left-4 w-[200px] h-[240px] rounded-[40%_60%_50%_50%/50%_40%_60%_50%] bg-gradient-to-r from-rose-200/25 via-red-500/30 to-transparent blur-[36px] smoke-plume-1" style={{ animationDelay: "-3.5s" }} />
           </div>
 
-          {/* Singer Cutout with floating micro-motion & smooth gradient bottom fade */}
+          {/* Singer Cutout with natural lighting & smooth gradient bottom fade (no artificial colored border) */}
           <div className="relative z-10 max-w-[360px] sm:max-w-[440px] lg:max-w-[490px] xl:max-w-[520px] w-full flex items-end justify-center animate-singer-float">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/images/singer.png"
               alt="Karaoke Singer"
-              className="w-full h-auto object-contain animate-red-glow select-none drop-shadow-[0_25px_50px_rgba(0,0,0,0.9)]"
+              className="w-full h-auto object-contain select-none drop-shadow-[0_25px_50px_rgba(0,0,0,0.95)]"
               style={{
                 WebkitMaskImage: "linear-gradient(to top, transparent 0%, rgba(0,0,0,0.25) 8%, rgba(0,0,0,0.85) 20%, black 32%, black 100%)",
                 maskImage: "linear-gradient(to top, transparent 0%, rgba(0,0,0,0.25) 8%, rgba(0,0,0,0.85) 20%, black 32%, black 100%)",

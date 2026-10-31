@@ -100,15 +100,6 @@ body {
   }
 }
 
-@keyframes redGlow {
-  0%, 100% {
-    filter: drop-shadow(0 0 15px rgba(239, 68, 68, 0.4)) drop-shadow(0 0 35px rgba(185, 28, 28, 0.25));
-  }
-  50% {
-    filter: drop-shadow(0 0 25px rgba(239, 68, 68, 0.7)) drop-shadow(0 0 50px rgba(220, 38, 38, 0.45));
-  }
-}
-
 /* Stage Smoke & Atmospheric Mist Animations */
 @keyframes smokeDriftLeft {
   0%, 100% {
@@ -149,10 +140,6 @@ body {
 
 .animate-aura-pulse {
   animation: auraPulse 4s ease-in-out infinite;
-}
-
-.animate-red-glow {
-  animation: redGlow 4s ease-in-out infinite;
 }
 
 .smoke-plume-1 {
