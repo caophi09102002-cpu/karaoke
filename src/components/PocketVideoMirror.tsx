@@ -161,10 +161,10 @@ export default function PocketVideoMirror({
   // Mini View (Floating bottom-right player)
   if (isMiniView) {
     return (
-      <div className="fixed bottom-20 right-3 z-50 w-72 bg-slate-950/95 border-2 border-purple-500/60 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl animate-in slide-in-from-bottom-5 duration-200">
-        <div className="flex items-center justify-between px-3 py-1.5 bg-purple-950/80 border-b border-purple-800/40 text-[11px] font-bold text-purple-200">
+      <div className="fixed bottom-20 right-3 z-50 w-72 bg-zinc-950/95 border border-white/[0.12] rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl animate-in slide-in-from-bottom-5 duration-200">
+        <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900 border-b border-white/[0.08] text-[11px] font-medium text-zinc-200">
           <div className="flex items-center gap-1.5 truncate">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
             <span className="truncate">{currentSong ? currentSong.title : "Màn hình phụ"}</span>
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -219,14 +219,14 @@ export default function PocketVideoMirror({
               className="w-full h-full object-cover pointer-events-none"
             />
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center text-slate-400 text-xs">
-              <Tv className="w-6 h-6 mb-1 text-slate-500" />
+            <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center text-zinc-500 text-xs">
+              <Tv className="w-6 h-6 mb-1 text-zinc-600" />
               <span>Chưa có bài đang phát</span>
             </div>
           )}
 
           {/* Muted Watermark Badge */}
-          <div className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-sm border border-white/10 text-[9px] font-medium text-slate-300 flex items-center gap-1 pointer-events-none">
+          <div className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-sm border border-white/10 text-[9px] font-mono text-zinc-400 flex items-center gap-1 pointer-events-none">
             <VolumeX className="w-3 h-3 text-amber-400" />
             <span>Muted</span>
           </div>
@@ -242,24 +242,24 @@ export default function PocketVideoMirror({
       className="fixed inset-0 z-50 bg-black/95 backdrop-blur-2xl flex flex-col animate-in fade-in duration-200 select-none"
     >
       {/* 1. TOP CONTROL BAR */}
-      <div className="px-4 py-3 bg-gradient-to-b from-slate-950 via-slate-900/90 to-transparent border-b border-slate-800/80 flex items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400 shrink-0">
+      <div className="px-4 py-3 bg-zinc-950/90 border-b border-white/[0.08] flex items-center justify-between gap-3 shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-zinc-200 shrink-0">
             <Tv className="w-4 h-4" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-xs md:text-sm font-bold text-white truncate">
-                Màn Hình Phụ Bỏ Túi (Live Mirror)
+              <span className="text-xs md:text-sm font-semibold text-white truncate">
+                Màn hình phụ (Live Mirror)
               </span>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black tracking-wide uppercase bg-emerald-500/20 border border-emerald-500/40 text-emerald-300">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono uppercase bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 Đồng bộ TV
               </span>
             </div>
-            <p className="text-[10px] md:text-xs text-amber-400/90 flex items-center gap-1 truncate font-medium">
+            <p className="text-[10px] md:text-xs text-zinc-400 flex items-center gap-1 truncate font-normal">
               <VolumeX className="w-3 h-3 shrink-0 text-amber-400" />
-              <span>Đã tự động tắt tiếng (Âm thanh phát từ dàn loa TV để không bị trễ)</span>
+              <span>Đã tắt tiếng (Âm thanh phát từ dàn loa TV để không bị trễ)</span>
             </p>
           </div>
         </div>
@@ -270,28 +270,28 @@ export default function PocketVideoMirror({
           {onSwitchToLyrics && (
             <button
               onClick={onSwitchToLyrics}
-              className="p-2 rounded-xl bg-purple-950/80 hover:bg-purple-900 text-purple-300 hover:text-white border border-purple-700/60 transition active:scale-95 flex items-center gap-1 text-xs"
+              className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white border border-white/[0.08] transition active:scale-95 flex items-center gap-1 text-xs"
               title="Chuyển sang chế độ Teleprompter lời bài hát"
             >
-              <FileText className="w-3.5 h-3.5 text-purple-300" />
-              <span className="hidden sm:inline text-[11px] font-bold">Xem Lời</span>
+              <FileText className="w-3.5 h-3.5 text-zinc-300" />
+              <span className="hidden sm:inline text-[11px] font-medium">Xem lời</span>
             </button>
           )}
 
           {/* Manual Resync Button */}
           <button
             onClick={handleForceResync}
-            className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition active:scale-95 flex items-center gap-1 text-xs"
+            className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-white/[0.08] transition active:scale-95 flex items-center gap-1 text-xs"
             title="Đồng bộ lại với TV"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-purple-400" />
-            <span className="hidden sm:inline text-[11px]">Đồng bộ ({lastSyncDrift}s)</span>
+            <RefreshCw className="w-3.5 h-3.5 text-zinc-400" />
+            <span className="hidden sm:inline text-[11px] font-mono">Đồng bộ ({lastSyncDrift}s)</span>
           </button>
 
           {/* Minimize into Floating PiP Button */}
           <button
             onClick={() => setIsMiniView(true)}
-            className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition active:scale-95"
+            className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-white/[0.08] transition active:scale-95"
             title="Thu nhỏ thành khung nổi góc màn hình"
           >
             <Minimize2 className="w-4 h-4" />
@@ -300,7 +300,7 @@ export default function PocketVideoMirror({
           {/* Native Fullscreen Toggle */}
           <button
             onClick={handleToggleFullscreen}
-            className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition active:scale-95"
+            className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-white/[0.08] transition active:scale-95"
             title={isNativeFullscreen ? "Thoát toàn màn hình" : "Toàn màn hình / Xoay ngang"}
           >
             <Maximize2 className="w-4 h-4" />
@@ -309,7 +309,7 @@ export default function PocketVideoMirror({
           {/* Close Button */}
           <button
             onClick={onClose}
-            className="p-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 hover:text-white border border-rose-500/40 transition active:scale-95"
+            className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-white border border-rose-500/20 transition active:scale-95"
             title="Đóng màn hình phụ"
           >
             <X className="w-4 h-4" />
@@ -319,7 +319,7 @@ export default function PocketVideoMirror({
 
       {/* 2. MAIN THEATER STAGE */}
       <div className="flex-1 flex flex-col items-center justify-center p-2 md:p-6 min-h-0 relative">
-        <div className="w-full max-w-4xl aspect-video bg-slate-950 rounded-2xl md:rounded-3xl overflow-hidden border border-slate-800 shadow-[0_0_50px_rgba(168,85,247,0.15)] relative flex items-center justify-center">
+        <div className="w-full max-w-4xl aspect-video bg-zinc-950 rounded-2xl md:rounded-3xl overflow-hidden border border-white/[0.1] shadow-2xl relative flex items-center justify-center">
           {currentSong?.youtubeId ? (
             <div className="w-full h-full relative">
               <YouTube
@@ -329,7 +329,7 @@ export default function PocketVideoMirror({
                   height: "100%",
                   playerVars: {
                     autoplay: 1,
-                    controls: 1, // Allow viewing full progress and subtitle toggle if needed
+                    controls: 1,
                     mute: 1, // STRICT 100% MUTED TO PREVENT ECHO
                     modestbranding: 1,
                     rel: 0,
@@ -356,21 +356,21 @@ export default function PocketVideoMirror({
               {/* Pause Indicator overlay if TV paused */}
               {!isPlaying && (
                 <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-center p-4 pointer-events-none">
-                  <div className="w-12 h-12 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center mb-2 animate-pulse">
-                    <Tv className="w-6 h-6 text-amber-400" />
+                  <div className="w-12 h-12 rounded-full bg-zinc-800 border border-white/[0.1] flex items-center justify-center mb-2">
+                    <Tv className="w-6 h-6 text-zinc-300" />
                   </div>
-                  <p className="text-white font-bold text-sm">TV Host đang tạm dừng bài hát</p>
-                  <p className="text-xs text-slate-400">Hình ảnh sẽ tiếp tục chạy khi TV tiếp tục phát</p>
+                  <p className="text-white font-medium text-sm">TV Host đang tạm dừng bài hát</p>
+                  <p className="text-xs text-zinc-400 mt-0.5">Hình ảnh sẽ tiếp tục chạy khi TV tiếp tục phát</p>
                 </div>
               )}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center text-center p-6 space-y-3">
-              <div className="w-16 h-16 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
-                <Tv className="w-8 h-8 animate-pulse" />
+              <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-white/[0.08] flex items-center justify-center text-zinc-400">
+                <Tv className="w-7 h-7" />
               </div>
-              <h3 className="text-lg font-bold text-white">Chưa có bài hát nào đang phát</h3>
-              <p className="text-xs text-slate-400 max-w-sm">
+              <h3 className="text-base font-semibold text-white">Chưa có bài hát nào đang phát</h3>
+              <p className="text-xs text-zinc-400 max-w-sm leading-relaxed">
                 Hãy chọn một bài hát từ danh sách tìm kiếm hoặc hàng đợi để bắt đầu buổi hát Karaoke!
               </p>
             </div>
@@ -381,34 +381,33 @@ export default function PocketVideoMirror({
         {currentSong && (
           <div className="w-full max-w-4xl mt-3 px-2 flex items-center justify-between gap-3 text-xs">
             <div className="min-w-0">
-              <h4 className="font-extrabold text-white text-sm md:text-base truncate">
+              <h4 className="font-semibold text-white text-sm md:text-base truncate">
                 {currentSong.title}
               </h4>
-              <p className="text-purple-300 text-[11px] truncate">
-                Người đặt bài: <b className="text-yellow-300">{currentSong.requestedBy || "Khách"}</b>
+              <p className="text-zinc-400 text-[11px] truncate mt-0.5">
+                Người đặt: <span className="text-zinc-200 font-medium">{currentSong.requestedBy || "Khách"}</span>
               </p>
             </div>
             <div className="text-right shrink-0">
-              <span className="px-2.5 py-1 rounded-xl bg-purple-950/60 border border-purple-700/50 text-purple-300 font-mono text-xs">
-                Màn hình phụ • HD 1080p
+              <span className="px-2.5 py-1 rounded-xl bg-zinc-900 border border-white/[0.08] text-zinc-300 font-mono text-[11px]">
+                Màn hình phụ • HD
               </span>
             </div>
           </div>
         )}
       </div>
 
-      {/* 3. BOTTOM CHEER & REACTION BAR (Cho phép vừa xem vừa tương tác bắn hiệu ứng) */}
-      <div className="px-4 py-3 bg-slate-950/90 border-t border-slate-900 flex items-center justify-between gap-3 shrink-0">
-        <div className="text-xs text-slate-400 hidden sm:flex items-center gap-1.5">
-          <Sparkles className="w-4 h-4 text-amber-400" />
-          <span>Bắn tương tác lên màn hình TV:</span>
+      {/* 3. BOTTOM CHEER & REACTION BAR */}
+      <div className="px-4 py-3 bg-zinc-950/90 border-t border-white/[0.08] flex items-center justify-between gap-3 shrink-0">
+        <div className="text-xs text-zinc-400 hidden sm:flex items-center gap-1.5 font-medium">
+          <span>Bắn cảm xúc lên TV:</span>
         </div>
 
         {/* Quick Reaction Buttons */}
         <div className="flex items-center justify-center gap-2 w-full sm:w-auto">
           <button
             onClick={() => onSendReaction?.("applause")}
-            className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition"
+            className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/[0.06] text-white font-medium text-xs flex items-center justify-center gap-1.5 active:scale-95 transition"
             title="Vỗ tay cổ vũ"
           >
             <span>👏</span>
@@ -417,7 +416,7 @@ export default function PocketVideoMirror({
 
           <button
             onClick={() => onSendReaction?.("cheer")}
-            className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition"
+            className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/[0.06] text-white font-medium text-xs flex items-center justify-center gap-1.5 active:scale-95 transition"
             title="Cổ vũ"
           >
             <span>🎉</span>
@@ -426,7 +425,7 @@ export default function PocketVideoMirror({
 
           <button
             onClick={() => onSendReaction?.("heart")}
-            className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition"
+            className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/[0.06] text-white font-medium text-xs flex items-center justify-center gap-1.5 active:scale-95 transition"
             title="Thả tim"
           >
             <span>💖</span>
@@ -435,7 +434,7 @@ export default function PocketVideoMirror({
 
           <button
             onClick={() => onSendReaction?.("whistle")}
-            className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition"
+            className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/[0.06] text-white font-medium text-xs flex items-center justify-center gap-1.5 active:scale-95 transition"
             title="Huýt sáo cổ vũ"
           >
             <span>📣</span>
@@ -445,7 +444,7 @@ export default function PocketVideoMirror({
 
         <button
           onClick={onClose}
-          className="hidden sm:inline-block px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition"
+          className="hidden sm:inline-block px-4 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-medium transition cursor-pointer"
         >
           Xong
         </button>

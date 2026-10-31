@@ -194,9 +194,8 @@ function HostRoomContent({ params }: HostPageProps) {
       singerName: finishedSong.requestedBy || "Ca sĩ bí ẩn",
     };
 
-    // Broadcast score to server -> all controllers
+    // Note: Scoring is now displayed only on Host screen (per user requirement)
     const socket = getSocket();
-    socket.emit("host:show-score", { roomId, scoreResult });
 
     setScoreData({
       score: finalScore,
@@ -494,7 +493,21 @@ function HostRoomContent({ params }: HostPageProps) {
           ytPlayerRef.current.pauseVideo();
         }
       } else if (cmd.action === "skip") {
-        performFadeOutAndEnd();
+        console.log("[Host] Song skipped early - NO SCORING");
+        if (scoreIntervalRef.current) clearInterval(scoreIntervalRef.current);
+        setScoreData(null);
+        setIsFadingOut(false);
+        if (videoRef.current) {
+          videoRef.current.pause();
+          videoRef.current.currentTime = 0;
+        }
+        if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
+          ytPlayerRef.current.stopVideo();
+        }
+        const socket = getSocket();
+        socket.emit("client:song-ended", { roomId });
+        setCurrentTime(0);
+        setDuration(0);
       } else if (cmd.action === "volume" && typeof cmd.value === "number") {
         if (videoRef.current) {
           videoRef.current.volume = cmd.value / 100;
@@ -803,120 +816,111 @@ function HostRoomContent({ params }: HostPageProps) {
                   const socket = getSocket();
                   socket.emit("client:control", { roomId, action: "play" });
                 }}
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center gap-4 z-30 cursor-pointer group hover:bg-black/70 transition-colors"
+                className="absolute inset-0 bg-black/75 backdrop-blur-md flex flex-col items-center justify-center gap-4 z-30 cursor-pointer group transition-all"
                 title="Bấm để tiếp tục phát"
               >
-                <div className="p-6 bg-rose-600/90 group-hover:bg-rose-500 rounded-full text-white shadow-2xl animate-pulse transition-all group-hover:scale-110">
-                  <Play className="w-14 h-14 translate-x-1" />
+                <div className="w-20 h-20 rounded-full bg-white/10 group-hover:bg-white/20 border border-white/20 flex items-center justify-center text-white shadow-2xl transition-all group-hover:scale-105">
+                  <Play className="w-8 h-8 fill-white translate-x-0.5" />
                 </div>
-                <div className="text-2xl font-bold tracking-wider text-rose-300 uppercase">
-                  BẤM VÀO ĐÂY ĐỂ TIẾP TỤC PHÁT
+                <div className="text-lg font-semibold text-white tracking-tight">
+                  Tạm dừng bài hát
                 </div>
-                <div className="text-sm text-slate-300">
-                  Hoặc điều khiển tiếp tục phát từ điện thoại Controller
+                <div className="text-xs text-zinc-400">
+                  Chạm vào màn hình hoặc điều khiển trên điện thoại để tiếp tục
                 </div>
               </div>
             )}
           </div>
         ) : (
           /* =========================================================================
-             CASE B: STANDBY SCREEN (Màn hình chờ khi danh sách bài trống)
+             CASE B: STANDBY SCREEN (Sân khấu chờ sang trọng & tối giản)
              ========================================================================= */
-          <div className="w-full h-full flex flex-col items-center justify-center p-6 md:p-12 text-center relative z-10 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
-            {/* Ambient Stage Lights */}
-            <div className="absolute top-1/4 left-1/3 w-[600px] h-[350px] bg-rose-600/15 rounded-full blur-[130px] animate-pulse pointer-events-none" />
-            <div className="absolute bottom-1/4 right-1/3 w-[600px] h-[350px] bg-purple-600/15 rounded-full blur-[130px] pointer-events-none" />
+          <div className="w-full h-full flex flex-col items-center justify-center p-6 md:p-12 text-center relative z-10 bg-[#09090b]">
+            {/* Subtle Warm Stage Lighting */}
+            <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-amber-500/[0.05] rounded-full blur-[140px] pointer-events-none" />
 
-            <div className="max-w-4xl mx-auto space-y-6 flex flex-col items-center">
-              {/* Standby Header Badge */}
-              <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-slate-900/90 border border-slate-800 text-xs font-semibold text-rose-300 tracking-wider shadow-lg">
-                <Sparkles className="w-4 h-4 text-rose-400" />
-                <span>CHẾ ĐỘ CHỜ • PHÒNG ĐÃ SẴN SÀNG</span>
+            <div className="max-w-2xl mx-auto space-y-8 flex flex-col items-center relative z-10">
+              {/* Brand Indicator */}
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] text-xs font-medium text-zinc-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Sân khấu đang sẵn sàng</span>
               </div>
 
-              <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white">
-                Sân Khấu Karaoke Thông Minh
-              </h1>
-              <p className="text-slate-400 text-sm md:text-base max-w-xl">
-                Quét mã QR dưới đây bằng điện thoại để tìm bài hát, thêm vào hàng đợi và điều khiển phát nhạc.
-              </p>
-
-              {/* QR Showcase Card */}
-              <div className="flex flex-col sm:flex-row items-center gap-8 p-6 md:p-8 bg-slate-900/90 border border-slate-800 rounded-3xl shadow-2xl backdrop-blur-xl">
-                {/* QR Code Container */}
-                <div className="p-4 bg-white rounded-2xl shadow-xl flex flex-col items-center justify-center shrink-0">
-                  {controllerUrl ? (
-                    <QRCodeSVG value={controllerUrl} size={180} level="H" includeMargin={false} />
-                  ) : (
-                    <div className="w-[180px] h-[180px] flex items-center justify-center text-slate-800 text-xs">
-                      Đang tạo mã QR...
-                    </div>
-                  )}
-                  <div className="mt-2 text-[10px] font-black uppercase tracking-wider text-slate-900">
-                    Camera Quét Mã
-                  </div>
-                </div>
-
-                {/* Instructions & Room Details */}
-                <div className="text-left space-y-4 max-w-xs">
-                  <div>
-                    <div className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold">
-                      Mã Phòng Hát:
-                    </div>
-                    <div className="text-3xl font-black font-mono tracking-widest text-transparent bg-gradient-to-r from-rose-400 via-purple-300 to-cyan-300 bg-clip-text">
-                      {roomId}
-                    </div>
-                  </div>
-
-                  {/* Admin PIN Box */}
-                  <div className="flex items-center gap-2">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/40 border border-amber-500/40 rounded-xl text-xs">
-                      <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      <span className="text-slate-400 font-medium">PIN Quản Trị:</span>
-                      <span className="font-mono font-bold text-amber-300 tracking-widest text-sm">
-                        {showPin ? hostPin || "----" : "••••"}
-                      </span>
-                      <button
-                        onClick={() => setShowPin(!showPin)}
-                        className="ml-1 p-1 text-slate-400 hover:text-white transition-colors cursor-pointer rounded-md hover:bg-slate-800/80"
-                        title={showPin ? "Ẩn mã PIN" : "Hiện mã PIN quản trị"}
-                      >
-                        {showPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="text-xs text-slate-300 leading-relaxed">
-                    Mở trình duyệt hoặc ứng dụng camera trên điện thoại, quét mã QR trên để vào thẳng giao diện chọn bài.
-                  </div>
-
-                  {/* Connected Controllers Counter */}
-                  <div className="pt-2 flex items-center gap-2 text-xs font-semibold text-slate-300">
-                    <Smartphone className="w-4 h-4 text-rose-400" />
-                    <span>
-                      Điện thoại kết nối:{" "}
-                      <b className="text-emerald-400 font-mono text-sm">{controllersCount}</b> thiết bị
+              {/* QR Showcase Card - Double Bezel Luxury Container */}
+              <div className="p-2 rounded-3xl bg-zinc-900/60 border border-white/[0.08] shadow-2xl backdrop-blur-xl">
+                <div className="p-6 md:p-8 rounded-[1.25rem] bg-zinc-950/90 border border-white/[0.04] flex flex-col sm:flex-row items-center gap-8">
+                  {/* QR Code Container */}
+                  <div className="p-3.5 bg-white rounded-2xl shadow-xl flex flex-col items-center justify-center shrink-0">
+                    {controllerUrl ? (
+                      <QRCodeSVG value={controllerUrl} size={180} level="H" includeMargin={false} />
+                    ) : (
+                      <div className="w-[180px] h-[180px] flex items-center justify-center text-zinc-600 text-xs font-mono">
+                        Đang tạo mã QR...
+                      </div>
+                    )}
+                    <span className="mt-2 text-[10px] font-bold tracking-wider text-zinc-900 uppercase">
+                      Quét để chọn bài
                     </span>
                   </div>
+
+                  {/* Room Details & Instructions */}
+                  <div className="text-left space-y-4 max-w-xs">
+                    <div>
+                      <span className="text-xs text-zinc-400 font-medium">
+                        Mã phòng hát
+                      </span>
+                      <div className="text-4xl font-extrabold font-mono tracking-widest text-white mt-0.5">
+                        {roomId}
+                      </div>
+                    </div>
+
+                    {/* Admin PIN Box */}
+                    <div className="flex items-center gap-2">
+                      <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-900/80 border border-white/[0.08] rounded-xl text-xs">
+                        <Lock className="w-3.5 h-3.5 text-amber-400/80 shrink-0 stroke-[1.75]" />
+                        <span className="text-zinc-400">PIN quản trị:</span>
+                        <span className="font-mono font-bold text-amber-300 tracking-wider">
+                          {showPin ? hostPin || "----" : "••••"}
+                        </span>
+                        <button
+                          onClick={() => setShowPin(!showPin)}
+                          className="ml-1 p-0.5 text-zinc-500 hover:text-white transition-colors cursor-pointer"
+                          title={showPin ? "Ẩn mã PIN" : "Hiện mã PIN quản trị"}
+                        >
+                          {showPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-zinc-400 leading-relaxed font-normal">
+                      Mở camera trên điện thoại quét mã QR hoặc truy cập đường dẫn để bắt đầu chọn bài.
+                    </p>
+
+                    {/* Connected Controllers Counter */}
+                    <div className="pt-2 flex items-center gap-2 text-xs font-medium text-zinc-300 border-t border-white/[0.06]">
+                      <Smartphone className="w-3.5 h-3.5 text-zinc-400 stroke-[1.75]" />
+                      <span>
+                        Đã kết nối: <b className="text-emerald-400 font-mono">{controllersCount}</b> thiết bị
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Quick Sample Song Injector for Easy Testing */}
-              <div className="pt-2 flex items-center gap-3">
-                <span className="text-xs text-slate-400">Chọn thử bài để test:</span>
+              {/* Discrete Sample Injector for Dev (Subtle & Unobtrusive) */}
+              <div className="pt-2 flex items-center gap-2 opacity-50 hover:opacity-100 transition-opacity">
+                <span className="text-[11px] text-zinc-500">Thử nhanh bài mẫu:</span>
                 <button
                   onClick={() => addSampleSong("youtube")}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-rose-600/30 transition-all cursor-pointer flex items-center gap-1.5"
+                  className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-[11px] rounded-lg border border-white/[0.08] transition-colors cursor-pointer"
                 >
-                  <PlusCircle className="w-3.5 h-3.5" />
-                  <span>Test Bài YouTube</span>
+                  Bài YouTube
                 </button>
                 <button
                   onClick={() => addSampleSong("local")}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-purple-600/30 transition-all cursor-pointer flex items-center gap-1.5"
+                  className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-[11px] rounded-lg border border-white/[0.08] transition-colors cursor-pointer"
                 >
-                  <PlusCircle className="w-3.5 h-3.5" />
-                  <span>Test Video Local</span>
+                  Video Local
                 </button>
               </div>
             </div>
@@ -924,99 +928,75 @@ function HostRoomContent({ params }: HostPageProps) {
         )}
 
         {/* =========================================================================
-            2. TOP OVERLAY (Mã phòng + Admin PIN + Tên bài đang phát + Controllers count)
+            2. TOP OVERLAY (Minimal Glass Pill Bar)
            ========================================================================= */}
-        <div className="absolute top-0 left-0 right-0 p-6 flex items-start justify-between z-20 pointer-events-none bg-gradient-to-b from-black/80 via-black/30 to-transparent">
+        <div className="absolute top-0 left-0 right-0 p-5 flex items-start justify-between z-20 pointer-events-none bg-gradient-to-b from-black/80 via-black/30 to-transparent">
           {/* Top Left: Room Code & Admin PIN & Status */}
-          <div className="flex items-center gap-2.5 pointer-events-auto">
-            <div className="flex items-center gap-2 bg-slate-950/85 border border-slate-800/80 backdrop-blur-md px-3.5 py-1.5 rounded-xl text-xs font-semibold">
-              <span className="text-slate-400">PHÒNG:</span>
-              <span className="font-mono text-base font-black tracking-widest text-rose-400">
+          <div className="flex items-center gap-2 pointer-events-auto">
+            <div className="flex items-center gap-2 bg-zinc-950/80 border border-white/[0.08] backdrop-blur-xl px-3 py-1.5 rounded-xl text-xs font-medium">
+              <span className="text-zinc-500 font-mono">PHÒNG</span>
+              <span className="font-mono text-sm font-bold tracking-wider text-white">
                 {roomId}
               </span>
             </div>
 
-            {/* Admin PIN Pill with Eye Toggle */}
-            <div className="flex items-center gap-1.5 bg-slate-950/85 border border-amber-900/50 backdrop-blur-md px-3 py-1.5 rounded-xl text-xs shadow-lg shadow-amber-950/20">
-              <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span className="text-slate-400 text-[11px] font-medium">PIN:</span>
-              <span className="font-mono font-bold text-amber-300 tracking-widest text-sm">
+            {/* Admin PIN Pill */}
+            <div className="flex items-center gap-1.5 bg-zinc-950/80 border border-white/[0.08] backdrop-blur-xl px-2.5 py-1.5 rounded-xl text-xs">
+              <Lock className="w-3 h-3 text-amber-400/80 shrink-0 stroke-[1.75]" />
+              <span className="font-mono text-xs font-semibold text-zinc-300">
                 {showPin ? hostPin || "----" : "••••"}
               </span>
               <button
                 onClick={() => setShowPin(!showPin)}
-                className="ml-1 p-0.5 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                className="p-0.5 text-zinc-500 hover:text-white transition-colors cursor-pointer"
                 title={showPin ? "Ẩn mã PIN" : "Hiện mã PIN quản trị"}
               >
-                {showPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                {showPin ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
               </button>
             </div>
 
-            <div className="flex items-center gap-2 bg-slate-950/85 border border-slate-800/80 backdrop-blur-md px-3 py-1.5 rounded-xl text-xs">
-              <Smartphone className="w-3.5 h-3.5 text-purple-400" />
-              <span className="font-mono font-bold text-white">{controllersCount}</span>
-              <span className="text-slate-400 text-[11px]">điện thoại</span>
+            <div className="flex items-center gap-1.5 bg-zinc-950/80 border border-white/[0.08] backdrop-blur-xl px-2.5 py-1.5 rounded-xl text-xs text-zinc-400 font-mono">
+              <Smartphone className="w-3.5 h-3.5 text-zinc-400 stroke-[1.75]" />
+              <span className="text-white font-bold">{controllersCount}</span>
             </div>
 
-            {/* CLOSE ROOM BUTTON */}
+            {/* Close Room Button */}
             <button
               onClick={() => setShowCloseConfirm(true)}
-              className="flex items-center gap-1.5 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/60 text-rose-300 hover:text-white backdrop-blur-md px-3 py-1.5 rounded-xl text-xs font-semibold transition active:scale-95 shadow-md shadow-rose-950/30 cursor-pointer pointer-events-auto"
+              className="flex items-center gap-1.5 bg-zinc-950/80 hover:bg-rose-950/40 border border-white/[0.08] hover:border-rose-500/30 text-zinc-400 hover:text-rose-300 backdrop-blur-xl px-2.5 py-1.5 rounded-xl text-xs transition-colors cursor-pointer"
               title="Đóng phòng & Kết thúc buổi tiệc"
             >
-              <LogOut className="w-3.5 h-3.5" />
+              <LogOut className="w-3 h-3" />
               <span className="hidden md:inline">Đóng phòng</span>
             </button>
           </div>
 
-          {/* Top Center / Right: Current Playing Song Banner + Audio Status */}
+          {/* Top Center / Right: Current Playing Song Banner */}
           {currentSong && (
-            <div className="flex flex-col sm:flex-row items-center gap-3 bg-slate-950/85 border border-slate-800/90 backdrop-blur-xl px-5 py-2.5 rounded-2xl shadow-2xl pointer-events-auto max-w-xl">
-              <div className="flex items-center gap-3 overflow-hidden flex-1">
-                <div className="p-2 bg-gradient-to-tr from-rose-500 to-purple-600 rounded-xl text-white shadow-lg shadow-rose-500/20 shrink-0">
-                  <Music className="w-5 h-5 animate-spin" style={{ animationDuration: "8s" }} />
+            <div className="flex items-center gap-3 bg-zinc-950/80 border border-white/[0.08] backdrop-blur-xl px-4 py-2 rounded-xl pointer-events-auto max-w-lg shadow-xl shadow-black/40">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+              <div className="text-left overflow-hidden min-w-0">
+                <div className="text-xs font-semibold text-white truncate max-w-xs sm:max-w-sm">
+                  {currentSong.title}
                 </div>
-                <div className="text-left overflow-hidden">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                    <span className="text-[10px] font-black uppercase tracking-wider text-rose-400">
-                      ĐANG PHÁT {currentSong.source === "local" && "• LOCAL BEAT"}
-                    </span>
-                  </div>
-                  <div className="text-sm font-bold text-white truncate max-w-xs sm:max-w-md">
-                    {currentSong.title}
-                  </div>
-                  <div className="text-xs text-slate-400 truncate">
-                    {currentSong.artist} •{" "}
-                    <span className="text-purple-300">Yêu cầu bởi {currentSong.requestedBy}</span>
-                  </div>
+                <div className="text-[11px] text-zinc-400 truncate">
+                  {currentSong.artist} • <span className="text-zinc-300">Yêu cầu bởi {currentSong.requestedBy}</span>
                 </div>
               </div>
 
-              {/* Audio DSP Badges (Tone & Vocal Splitter) */}
-              <div className="flex items-center gap-2 shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 sm:border-l border-slate-800/80 sm:pl-3">
-                <div
-                  className={`px-2.5 py-1 rounded-xl text-xs font-mono font-bold border transition-all ${
-                    pitchShift === 0
-                      ? "bg-slate-900 border-slate-700 text-slate-300"
-                      : "bg-purple-950/80 border-purple-500/60 text-purple-300 shadow-lg shadow-purple-900/30 animate-pulse"
-                  }`}
-                  title="Cao độ bài hát (Tone semitones)"
-                >
-                  Tone: {pitchShift === 0 ? "Gốc" : pitchShift > 0 ? `+${pitchShift}` : pitchShift}
+              {/* Tone Semitone Status */}
+              {pitchShift !== 0 && (
+                <div className="px-2 py-0.5 rounded bg-white/[0.06] text-amber-300 font-mono text-[11px] font-semibold shrink-0">
+                  Tone: {pitchShift > 0 ? `+${pitchShift}` : pitchShift}
                 </div>
+              )}
 
-                <div
-                  className={`px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all ${
-                    isVocalMuted
-                      ? "bg-amber-950/80 border-amber-500/60 text-amber-300 shadow-lg shadow-amber-900/30"
-                      : "bg-emerald-950/80 border-emerald-500/60 text-emerald-300"
-                  }`}
-                  title="Trạng thái giọng ca sĩ (Stereo Splitter)"
-                >
-                  {isVocalMuted ? "🎧 Tắt ca sĩ (Beat)" : "🎤 Bật ca sĩ"}
+              {/* Vocal Status */}
+              {isVocalMuted && (
+                <div className="px-2 py-0.5 rounded bg-white/[0.06] text-zinc-300 text-[11px] font-medium shrink-0">
+                  Beat
                 </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -1024,47 +1004,47 @@ function HostRoomContent({ params }: HostPageProps) {
           <div className="pointer-events-auto">
             <button
               onClick={toggleFullScreen}
-              className="p-2.5 bg-slate-950/80 hover:bg-slate-800 border border-slate-800/80 rounded-xl text-slate-300 hover:text-white transition-all cursor-pointer backdrop-blur-md"
+              className="p-2 bg-zinc-950/80 hover:bg-zinc-800 border border-white/[0.08] rounded-xl text-zinc-400 hover:text-white transition-colors cursor-pointer backdrop-blur-xl"
               title="Toàn màn hình TV"
             >
-              <Maximize2 className="w-4 h-4" />
+              <Maximize2 className="w-4 h-4 stroke-[1.75]" />
             </button>
           </div>
         </div>
 
         {/* =========================================================================
-            3. BOTTOM OVERLAY: Upcoming Next Song (20s countdown) & Progress Bar
+            3. BOTTOM OVERLAY: Upcoming Next Song Toast & Progress Bar
            ========================================================================= */}
         {currentSong && (
-          <div className="absolute bottom-0 left-0 right-0 p-6 flex flex-col gap-3 z-20 pointer-events-none bg-gradient-to-t from-black/90 via-black/40 to-transparent">
-            {/* NEXT SONG BANNER (Triggered when remainingTime <= 20s) */}
+          <div className="absolute bottom-0 left-0 right-0 p-5 flex flex-col gap-3 z-20 pointer-events-none bg-gradient-to-t from-black/90 via-black/40 to-transparent">
+            {/* NEXT SONG TOAST (When remainingTime <= 20s) */}
             {isLast20Seconds && nextSong && (
-              <div className="self-start pointer-events-auto animate-bounce transition-all duration-500">
-                <div className="flex items-center gap-3.5 px-6 py-3.5 bg-gradient-to-r from-purple-900/90 via-slate-900/95 to-rose-900/90 border border-purple-500/40 rounded-2xl shadow-2xl backdrop-blur-2xl">
-                  <div className="p-2 bg-purple-600 rounded-xl text-white shadow-lg animate-pulse">
-                    <Bell className="w-5 h-5" />
+              <div className="self-start pointer-events-auto animate-in slide-in-from-bottom-2 duration-300">
+                <div className="flex items-center gap-3 px-4 py-2.5 bg-zinc-950/90 border border-white/[0.1] rounded-xl shadow-2xl backdrop-blur-xl">
+                  <div className="p-1.5 bg-white/[0.08] rounded-lg text-amber-400">
+                    <Bell className="w-4 h-4 stroke-[1.75]" />
                   </div>
-                  <div className="text-left">
-                    <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-purple-300">
-                      <span>BÀI TIẾP THEO (Còn {Math.round(remainingTime)}s)</span>
+                  <div className="text-left text-xs">
+                    <div className="text-[10px] text-zinc-400 font-medium">
+                      Bài kế tiếp (sau {Math.round(remainingTime)}s):
                     </div>
-                    <div className="text-base font-extrabold text-white">
-                      {nextSong.title} - {nextSong.artist}
+                    <div className="font-semibold text-white truncate max-w-sm">
+                      {nextSong.title}
                     </div>
-                    <div className="text-xs text-rose-300">
-                      Do <b>{nextSong.requestedBy}</b> yêu cầu
+                    <div className="text-[11px] text-zinc-400">
+                      Do {nextSong.requestedBy} đặt
                     </div>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Song Duration / Progress Bar */}
-            <div className="w-full flex items-center gap-3 text-xs font-mono text-slate-400 pointer-events-none">
+            {/* Song Duration / Clean Progress Bar */}
+            <div className="w-full flex items-center gap-3 text-xs font-mono text-zinc-500 pointer-events-none">
               <span>{formatSeconds(currentTime)}</span>
-              <div className="flex-1 h-1.5 bg-slate-800/80 rounded-full overflow-hidden">
+              <div className="flex-1 h-1 bg-white/[0.1] rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-rose-500 to-purple-500 transition-all duration-300"
+                  className="h-full bg-white transition-all duration-300"
                   style={{
                     width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%`,
                   }}
@@ -1076,20 +1056,20 @@ function HostRoomContent({ params }: HostPageProps) {
         )}
 
         {/* =========================================================================
-            4. DANMAKU BARRAGE LAYER (Running text from right to left across screen)
+            4. DANMAKU BARRAGE LAYER
            ========================================================================= */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-40">
           {danmakuList.map((item) => (
             <div
               key={item.id}
-              className="absolute whitespace-nowrap animate-danmaku font-black text-2xl md:text-4xl tracking-wide danmaku-text select-none flex items-center gap-2"
+              className="absolute whitespace-nowrap animate-danmaku font-bold text-xl md:text-3xl tracking-wide danmaku-text select-none flex items-center gap-2"
               style={{
                 top: `${item.topPercent}%`,
                 animationDuration: `${item.durationSec}s`,
-                color: item.color,
+                color: item.color || "#ffffff",
               }}
             >
-              <span className="text-[11px] bg-black/75 text-white px-2.5 py-0.5 rounded-full border border-white/30 font-semibold shadow-md">
+              <span className="text-[10px] bg-black/60 text-white/90 px-2 py-0.5 rounded-full border border-white/20 font-medium shadow-sm">
                 {item.sender}
               </span>
               <span>{item.text}</span>
@@ -1098,18 +1078,16 @@ function HostRoomContent({ params }: HostPageProps) {
         </div>
 
         {/* =========================================================================
-            5. FLOATING EMOJI PARTICLES (Animation when Controller sends Emoji/Cheer)
+            5. FLOATING EMOJI PARTICLES
            ========================================================================= */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-40">
           {cheers.map((item) => (
             <div
               key={item.id}
-              className="absolute bottom-6 animate-float-up text-5xl md:text-6xl drop-shadow-2xl select-none"
+              className="absolute bottom-6 animate-float-up text-4xl md:text-5xl drop-shadow-xl select-none"
               style={{
                 left: `${item.left}%`,
                 animationDuration: `${item.animationDuration}s`,
-                // Randomized rotation for realistic drifting
-                ["--rot" as any]: `${(item.left % 20) - 10}deg`,
               }}
             >
               {item.emoji}
@@ -1121,117 +1099,119 @@ function HostRoomContent({ params }: HostPageProps) {
             6. FADING OUT INDICATOR
            ========================================================================= */}
         {isFadingOut && !scoreData && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-black/80 backdrop-blur-md border border-amber-500/40 px-8 py-5 rounded-2xl flex items-center gap-4 text-white shadow-2xl animate-pulse">
-            <div className="w-8 h-8 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
-            <div>
-              <p className="text-xl font-bold text-amber-300">Đang hoàn tất bài hát... 👏</p>
-              <p className="text-xs text-slate-300">Chuẩn bị công bố điểm số</p>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-zinc-950/90 backdrop-blur-xl border border-white/[0.1] px-6 py-4 rounded-2xl flex items-center gap-3 text-white shadow-2xl">
+            <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+            <div className="text-left">
+              <p className="text-sm font-semibold text-white">Hoàn tất bài hát...</p>
+              <p className="text-xs text-zinc-400">Đang tính điểm số</p>
             </div>
           </div>
         )}
 
         {/* =========================================================================
-            7. KARAOKE SCORING CELEBRATION OVERLAY (Mục 1 & 6)
+            7. KARAOKE SCORING OVERLAY (Stage Red Silk BR - Frameless & Boxless)
            ========================================================================= */}
         {scoreData && (
-          <div className="absolute inset-0 z-50 bg-gradient-to-b from-slate-950/95 via-purple-950/90 to-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in-95 duration-300 select-none">
-            {/* Ambient Background Glow */}
-            <div className="absolute w-96 h-96 bg-amber-500/20 rounded-full blur-3xl pointer-events-none -top-10" />
-            <div className="absolute w-80 h-80 bg-fuchsia-600/20 rounded-full blur-3xl pointer-events-none -bottom-10" />
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-between p-6 sm:p-12 text-center select-none overflow-hidden animate-in fade-in duration-500">
+            {/* Background: Dramatic Red Silk Waves & Atmospheric Stage Glow */}
+            <div
+              className="absolute inset-0 bg-cover bg-center bg-no-repeat pointer-events-none z-0"
+              style={{ backgroundImage: "url('/images/karaoke-bg-red.jpg')" }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/60" />
+              {/* Pulsing Red & Amber Core Stage Lighting */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] sm:w-[750px] h-[550px] sm:h-[750px] bg-red-600/35 rounded-full blur-[130px] pointer-events-none animate-aura-pulse" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[280px] sm:w-[380px] h-[280px] sm:h-[380px] bg-amber-400/25 rounded-full blur-[80px] pointer-events-none" />
+            </div>
 
-            {/* Trophy & Badge */}
-            <div className="relative mb-4">
-              <div className="w-28 h-28 md:w-36 md:h-36 rounded-full bg-gradient-to-tr from-amber-600 via-yellow-400 to-amber-200 p-1 shadow-[0_0_50px_rgba(245,158,11,0.5)] flex items-center justify-center animate-bounce">
-                <div className="w-full h-full rounded-full bg-slate-950/80 flex items-center justify-center">
-                  <Trophy className="w-14 h-14 md:w-18 md:h-18 text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)]" />
+            {/* Top Song Info - Frameless directly on stage */}
+            <div className="relative z-10 pt-2 sm:pt-4 space-y-2 max-w-3xl mx-auto">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs uppercase tracking-widest text-amber-300 font-semibold shadow-lg">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Tổng kết màn trình diễn</span>
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              </div>
+              <h2 className="text-2xl sm:text-5xl font-black text-white tracking-tight drop-shadow-[0_4px_24px_rgba(0,0,0,0.9)] truncate px-4">
+                {scoreData.songTitle}
+              </h2>
+              <p className="text-xs sm:text-base text-zinc-300 drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]">
+                Trình bày: <b className="text-amber-300 font-bold">{scoreData.singerName}</b>
+              </p>
+            </div>
+
+            {/* Center Massive Glowing Score - Frameless & Impactful */}
+            <div className="relative z-10 flex flex-col items-center justify-center my-auto py-2">
+              <div className="relative flex items-center justify-center">
+                {/* Subtle trophy icon backdrop */}
+                <div className="absolute -top-12 opacity-15 pointer-events-none">
+                  <Trophy className="w-36 h-36 text-amber-300 stroke-[1]" />
+                </div>
+
+                {/* Gigantic Score Number */}
+                <div className="flex items-baseline justify-center gap-2">
+                  <span className="text-8xl sm:text-[140px] font-black tracking-tighter font-mono text-transparent bg-clip-text bg-gradient-to-b from-white via-amber-100 to-amber-400 drop-shadow-[0_0_60px_rgba(251,191,36,0.7)] leading-none select-none">
+                    {scoreData.displayScore}
+                  </span>
+                  <span className="text-2xl sm:text-4xl font-extrabold text-white/50 tracking-wide font-mono">
+                    / 100
+                  </span>
                 </div>
               </div>
-              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 bg-gradient-to-r from-pink-500 to-purple-600 rounded-full text-white text-xs font-black tracking-wider uppercase border border-white/20 shadow-lg whitespace-nowrap">
-                KARAOKE SCORE
+
+              {/* Award Title Callout */}
+              <div className="mt-4 inline-flex items-center gap-2.5 px-6 py-2 rounded-2xl bg-amber-500/20 border border-amber-400/40 text-sm sm:text-lg font-bold text-amber-300 backdrop-blur-md shadow-[0_0_35px_rgba(245,158,11,0.35)]">
+                <Award className="w-5 h-5 text-amber-400" />
+                <span>{scoreData.title}</span>
               </div>
             </div>
 
-            {/* Song title & Singer */}
-            <h2 className="text-2xl md:text-4xl font-black text-white drop-shadow-md max-w-2xl truncate mb-1">
-              {scoreData.songTitle}
-            </h2>
-            <p className="text-sm md:text-base text-purple-200/90 font-medium mb-6 flex items-center gap-2">
-              <span>Trình bày:</span>
-              <span className="font-bold text-yellow-300 px-2 py-0.5 rounded-md bg-yellow-400/10 border border-yellow-400/30">
-                {scoreData.singerName}
-              </span>
-            </p>
-
-            {/* Large Animated Score Number */}
-            <div className="flex items-baseline justify-center gap-2 mb-4">
-              <span className="text-7xl md:text-9xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 via-amber-400 to-orange-500 drop-shadow-[0_10px_25px_rgba(245,158,11,0.6)] font-mono">
-                {scoreData.displayScore}
-              </span>
-              <span className="text-2xl md:text-4xl font-extrabold text-amber-300/80">/ 100</span>
-            </div>
-
-            {/* Award Title Badge */}
-            <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 shadow-xl mb-8">
-              <Award className="w-5 h-5 text-amber-300" />
-              <span className="text-base md:text-lg font-bold text-amber-200">
-                {scoreData.title}
-              </span>
-            </div>
-
-            {/* Footer Skip & Countdown */}
-            <div className="flex items-center gap-4">
+            {/* Bottom Controls: Skip Now & Countdown - Frameless */}
+            <div className="relative z-10 pb-4 flex flex-col sm:flex-row items-center justify-center gap-4">
               <button
                 onClick={skipScoringNow}
-                className="pointer-events-auto px-6 py-2.5 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-sm shadow-lg shadow-purple-600/30 flex items-center gap-2 transition active:scale-95"
+                className="px-6 py-3 rounded-2xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs sm:text-sm shadow-2xl transition-all active:scale-95 flex items-center gap-2 cursor-pointer backdrop-blur-md"
               >
-                <span>Chuyển bài ngay</span>
+                <span>Chuyển bài tiếp theo</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
-              <span className="text-xs text-slate-400">
-                Tự chuyển bài sau {scoreData.countdown}s...
+              <span className="text-xs sm:text-sm text-zinc-300 font-mono tracking-wide">
+                Tự động chuyển sau <b className="text-white font-bold">{scoreData.countdown}s</b>
               </span>
             </div>
           </div>
         )}
 
         {/* =========================================================================
-            8. MODAL: XÁC NHẬN ĐÓNG PHÒNG VÀ KẾT THÚC BUỔI TIỆC
+            8. MODAL: XÁC NHẬN ĐÓNG PHÒNG
            ========================================================================= */}
         {showCloseConfirm && (
-          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200 select-none pointer-events-auto">
-            <div className="w-full max-w-md bg-gradient-to-b from-slate-900 to-rose-950/40 border border-rose-500/40 rounded-3xl p-6 shadow-2xl text-center space-y-4">
-              <div className="w-16 h-16 mx-auto rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400">
-                <AlertTriangle className="w-8 h-8" />
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200 select-none pointer-events-auto">
+            <div className="w-full max-w-sm bg-zinc-900 border border-white/[0.1] rounded-2xl p-6 shadow-2xl text-center space-y-4">
+              <div className="w-12 h-12 mx-auto rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                <AlertTriangle className="w-6 h-6 stroke-[1.75]" />
               </div>
 
               <div>
-                <h3 className="text-xl font-black text-white">Đóng Phòng & Kết Thúc Tiệc?</h3>
-                <p className="text-xs text-slate-300 mt-2 leading-relaxed">
-                  Bạn có chắc chắn muốn giải tán phòng <b className="text-rose-400 font-mono text-sm">{roomId}</b>? Toàn bộ danh sách bài hát sẽ được xóa và ngắt kết nối tất cả điện thoại của khách.
+                <h3 className="text-base font-bold text-white">Đóng phòng hát?</h3>
+                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                  Phòng <b className="text-white font-mono">{roomId}</b> sẽ bị đóng vĩnh viễn và ngắt kết nối các thiết bị đang tham gia.
                 </p>
               </div>
 
-              <div className="flex items-center gap-3 pt-2">
+              <div className="flex items-center gap-2 pt-2">
                 <button
                   onClick={() => setShowCloseConfirm(false)}
                   disabled={isClosingRoom}
-                  className="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition cursor-pointer"
+                  className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium text-xs transition cursor-pointer"
                 >
-                  Hủy bỏ
+                  Hủy
                 </button>
                 <button
                   onClick={handleCloseRoom}
                   disabled={isClosingRoom}
-                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold text-xs shadow-lg shadow-rose-600/40 transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                  className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  {isClosingRoom ? (
-                    <span>Đang đóng...</span>
-                  ) : (
-                    <>
-                      <LogOut className="w-4 h-4" />
-                      <span>Xác nhận đóng phòng</span>
-                    </>
-                  )}
+                  {isClosingRoom ? "Đang đóng..." : "Đóng phòng"}
                 </button>
               </div>
             </div>

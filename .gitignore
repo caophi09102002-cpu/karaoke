@@ -42,3 +42,4 @@ next-env.d.ts
 
 # local persistent state cache
 .karaoke_rooms_cache.json
+Untitled-*.txt

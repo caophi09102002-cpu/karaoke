@@ -82,6 +82,9 @@ import {
   LogOut,
   AlertTriangle,
   AlertCircle,
+  MoreHorizontal,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 
 interface ControllerPageProps {
@@ -168,8 +171,8 @@ function ControllerContent({ params }: ControllerPageProps) {
   const [isRoomClosed, setIsRoomClosed] = useState<boolean>(false);
   const [roomClosedReason, setRoomClosedReason] = useState<string>("");
 
-  // Karaoke Scoring Celebration popup on phone (Mục 1)
-  const [scoreCelebration, setScoreCelebration] = useState<ScoreResult | null>(null);
+  // Player Remote Controls expand/collapse state
+  const [isPlayerExpanded, setIsPlayerExpanded] = useState<boolean>(false);
 
   // Pocket Video Mirror (Giải pháp 1.2: Màn hình phụ bỏ túi xem trực tiếp TV đã tắt tiếng)
   const [showVideoMirror, setShowVideoMirror] = useState<boolean>(false);
@@ -187,8 +190,11 @@ function ControllerContent({ params }: ControllerPageProps) {
   const [currentTime, setCurrentTime] = useState<number>(0);
   const lyricsContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Curated Playlist Category Filter (Mục 4)
-  const [selectedCategory, setSelectedCategory] = useState<string>("party_remix");
+  // Quick Action Menu Drawer (Thực đơn cài đặt & tùy chọn phòng)
+  const [showQuickMenu, setShowQuickMenu] = useState<boolean>(false);
+
+  // Curated Playlist Category Filter (Mục 4: Mặc định rỗng để màn hình sạch sẽ khi mới vào phòng)
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
 
   // Favorites States (stored in phone localStorage)
   const [favorites, setFavorites] = useState<FavoriteSong[]>([]);
@@ -405,15 +411,6 @@ function ControllerContent({ params }: ControllerPageProps) {
       showToast("⚠️ " + (data.message || "Hành động bị từ chối"));
     }
 
-    function onShowScore(data: { roomId: string; scoreResult: ScoreResult }) {
-      if (data.roomId === roomId && data.scoreResult) {
-        setScoreCelebration(data.scoreResult);
-        setTimeout(() => {
-          setScoreCelebration(null);
-        }, 6500);
-      }
-    }
-
     function onTimeUpdate(data: { roomId: string; currentTime: number }) {
       if (data.roomId === roomId && typeof data.currentTime === "number") {
         setCurrentTime(data.currentTime);
@@ -427,7 +424,6 @@ function ControllerContent({ params }: ControllerPageProps) {
     socket.on("room-updated", onRoomUpdated);
     socket.on("server:role-updated", onRoleUpdated);
     socket.on("server:error", onServerError);
-    socket.on("server:show-score", onShowScore);
     socket.on("host:time-update", onTimeUpdate);
     socket.on("server:room-closed", onRoomClosed);
 
@@ -443,7 +439,6 @@ function ControllerContent({ params }: ControllerPageProps) {
       socket.off("room-updated", onRoomUpdated);
       socket.off("server:role-updated", onRoleUpdated);
       socket.off("server:error", onServerError);
-      socket.off("server:show-score", onShowScore);
       socket.off("host:time-update", onTimeUpdate);
       socket.off("server:room-closed", onRoomClosed);
     };
@@ -892,83 +887,40 @@ function ControllerContent({ params }: ControllerPageProps) {
   }, [activeLyricIndex, showLyricsModal]);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-rose-500 selection:text-white font-sans max-w-md mx-auto relative border-x border-slate-900 shadow-2xl pb-32">
-      {/* Background Ambient Glow */}
-      <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
-        <div className="absolute top-10 left-1/2 -translate-x-1/2 w-80 h-80 bg-rose-600/15 rounded-full blur-3xl animate-pulse" />
-      </div>
-
+    <div className="min-h-screen bg-[#09090b] text-zinc-100 flex flex-col justify-between selection:bg-amber-500/30 selection:text-white font-sans max-w-md mx-auto relative border-x border-white/[0.06] shadow-2xl pb-72">
       {/* Floating Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-emerald-500/90 text-white text-xs font-semibold rounded-full shadow-2xl backdrop-blur-md flex items-center gap-2 animate-bounce">
-          <CheckCircle2 className="w-4 h-4" />
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-zinc-900 border border-white/[0.1] text-white text-xs font-semibold rounded-full shadow-2xl backdrop-blur-md flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           <span>{toastMessage}</span>
         </div>
       )}
 
       {/* Mobile Sticky Top Header */}
-      <header className="sticky top-0 z-40 px-3 py-2.5 bg-slate-950/95 backdrop-blur-xl border-b border-slate-900 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+      <header className="sticky top-0 z-40 px-3.5 py-3 bg-[#09090b]/95 backdrop-blur-xl border-b border-white/[0.06] flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
           <Link
             href="/"
-            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
           </Link>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-slate-400">Phòng:</span>
-              <span className="text-xs font-bold font-mono tracking-wider text-rose-400">
+              <span className="text-xs text-zinc-400 font-medium">Phòng:</span>
+              <span className="text-sm font-bold font-mono tracking-wider text-white">
                 {roomId}
               </span>
             </div>
-            <div className="text-[9px] text-slate-400">
-              TV: {hostConnected ? <span className="text-emerald-400">Online</span> : <span className="text-amber-400">Chờ TV</span>}
+            <div className="text-[10px] text-zinc-400 flex items-center gap-1">
+              <span className={`w-1.5 h-1.5 rounded-full ${hostConnected ? "bg-emerald-400" : "bg-amber-400"}`} />
+              <span>{hostConnected ? "TV Online" : "Chờ TV..."}</span>
             </div>
           </div>
         </div>
 
-        {/* Right Header Actions: WakeLock, Cast Button, Admin Settings, Role Badge, Nickname */}
+        {/* Right Header Actions: Cast Button, Nickname, More Options Menu */}
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* WAKE LOCK TOGGLE (Mục 5: Giữ màn hình sáng - Mặc định TẮT tiết kiệm pin) */}
-          <button
-            onClick={toggleWakeLock}
-            className={`p-1.5 rounded-full border transition-all cursor-pointer flex items-center justify-center active:scale-90 ${
-              isWakeLockActive
-                ? "bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-sm shadow-amber-950/40"
-                : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
-            }`}
-            title={
-              isWakeLockActive
-                ? "Màn hình: LUÔN SÁNG (Bấm để tắt, cho phép khóa màn hình tiết kiệm pin)"
-                : "Màn hình: TỰ TẮT TIẾT KIỆM PIN (Bấm để giữ màn hình luôn sáng)"
-            }
-          >
-            {isWakeLockActive ? (
-              <Sun className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-            ) : (
-              <Moon className="w-3.5 h-3.5 text-slate-400" />
-            )}
-          </button>
-
-          {/* ADMIN SETTINGS BUTTON (Mục 3: Cài đặt Quản trị viên phòng) */}
-          {controllerRole === "admin" && (
-            <button
-              onClick={handleOpenSettingsModal}
-              className={`p-1.5 rounded-full border transition-all cursor-pointer relative flex items-center justify-center active:scale-90 ${
-                roomSettings.fairPlayEnabled
-                  ? "bg-purple-950/80 border-purple-500/70 text-purple-300 shadow-sm"
-                  : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
-              }`}
-              title="Cài đặt phòng & Chế độ Xếp hàng công bằng (Fair Play)"
-            >
-              <Settings className="w-3.5 h-3.5 text-slate-300" />
-              {roomSettings.fairPlayEnabled && (
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-purple-500 rounded-full animate-ping" />
-              )}
-            </button>
-          )}
-
           {/* CAST TO TV BUTTON (Header Variant) */}
           <CastButton
             variant="header"
@@ -979,38 +931,108 @@ function ControllerContent({ params }: ControllerPageProps) {
             onClick={() => setShowCastModal(true)}
           />
 
-          {/* 1. ROLE BADGE / CLAIM ADMIN BUTTON */}
-          {controllerRole === "admin" ? (
-            <div className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/70 text-amber-300 shadow-sm shadow-amber-950/40">
-              <Crown className="w-3 h-3 text-amber-400 animate-bounce" />
-              <span className="hidden sm:inline">VIP Host</span>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowPinModal(true)}
-              className="flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-slate-900 hover:bg-slate-800 border border-amber-500/40 text-amber-300 transition-all cursor-pointer shadow-sm active:scale-95"
-              title="Nhập mã PIN 4 số trên TV để trở thành Chủ phòng"
-            >
-              <Key className="w-3 h-3 text-amber-400" />
-              <span className="hidden sm:inline">Chủ phòng</span>
-            </button>
-          )}
-
-          {/* 2. NICKNAME CHIP (Editable) */}
+          {/* User Nickname Button */}
           <button
             onClick={() => {
               setNameInput(userName);
               setIsEditingName(true);
             }}
-            className="flex items-center gap-1 px-2 py-1 rounded-full text-[10px] bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-zinc-300 hover:text-white transition-colors cursor-pointer"
             title="Bấm để đổi tên hiển thị"
           >
-            <User className="w-3 h-3 text-rose-400" />
-            <span className="max-w-[55px] truncate font-medium">{userName}</span>
-            <Edit3 className="w-2.5 h-2.5 text-slate-500" />
+            <User className="w-3.5 h-3.5 text-zinc-400 stroke-[1.75]" />
+            <span className="max-w-[70px] truncate font-medium">{userName}</span>
+          </button>
+
+          {/* Quick Menu Button (...) */}
+          <button
+            onClick={() => setShowQuickMenu(!showQuickMenu)}
+            className="p-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            title="Tùy chọn & Cài đặt phòng"
+          >
+            <MoreHorizontal className="w-4 h-4" />
           </button>
         </div>
       </header>
+
+      {/* QUICK OPTIONS DRAWER / SHEET */}
+      {showQuickMenu && (
+        <div className="sticky top-[57px] z-30 p-3 bg-zinc-900/98 backdrop-blur-2xl border-b border-white/[0.08] animate-in slide-in-from-top-2 duration-150 space-y-2">
+          <div className="flex items-center justify-between text-xs font-semibold text-zinc-400 px-1 pb-1 border-b border-white/[0.04]">
+            <span>TÙY CHỌN PHÒNG</span>
+            <button
+              onClick={() => setShowQuickMenu(false)}
+              className="p-0.5 text-zinc-500 hover:text-white"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            {/* Wake Lock Toggle */}
+            <button
+              onClick={toggleWakeLock}
+              className={`p-2.5 rounded-xl border flex items-center gap-2 text-left transition-colors cursor-pointer ${
+                isWakeLockActive
+                  ? "bg-amber-400/10 border-amber-400/30 text-amber-300"
+                  : "bg-white/[0.02] border-white/[0.06] text-zinc-400 hover:text-white"
+              }`}
+            >
+              {isWakeLockActive ? (
+                <Sun className="w-4 h-4 text-amber-400 stroke-[1.75]" />
+              ) : (
+                <Moon className="w-4 h-4 text-zinc-500 stroke-[1.75]" />
+              )}
+              <div>
+                <div className="font-semibold">{isWakeLockActive ? "Luôn sáng" : "Tự tắt màn"}</div>
+                <div className="text-[10px] text-zinc-500">Tiết kiệm pin</div>
+              </div>
+            </button>
+
+            {/* Admin PIN / Claim Admin */}
+            {controllerRole === "admin" ? (
+              <div className="p-2.5 rounded-xl bg-amber-400/10 border border-amber-400/30 text-amber-300 flex items-center gap-2">
+                <Crown className="w-4 h-4 text-amber-400 stroke-[1.75]" />
+                <div>
+                  <div className="font-semibold">VIP Host</div>
+                  <div className="text-[10px] text-amber-400/70">Toàn quyền phòng</div>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setShowQuickMenu(false);
+                  setShowPinModal(true);
+                }}
+                className="p-2.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] text-zinc-400 hover:text-white flex items-center gap-2 transition-colors cursor-pointer text-left"
+              >
+                <Key className="w-4 h-4 text-amber-400 stroke-[1.75]" />
+                <div>
+                  <div className="font-semibold">Chủ phòng</div>
+                  <div className="text-[10px] text-zinc-500">Nhập mã PIN TV</div>
+                </div>
+              </button>
+            )}
+
+            {/* Admin Room Settings */}
+            {controllerRole === "admin" && (
+              <button
+                onClick={() => {
+                  setShowQuickMenu(false);
+                  handleOpenSettingsModal();
+                }}
+                className="p-2.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] text-zinc-300 flex items-center gap-2 transition-colors cursor-pointer text-left col-span-2"
+              >
+                <Settings className="w-4 h-4 text-zinc-400 stroke-[1.75]" />
+                <div className="flex-1">
+                  <div className="font-semibold">Cài đặt phòng & Xếp hàng Fair Play</div>
+                  <div className="text-[10px] text-zinc-500">Giới hạn số bài hát mỗi người trong bàn</div>
+                </div>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* =========================================================================
           TAB 1: TÌM BÀI HÁT YOUTUBE (Hỗ trợ viết tắt Acronym Matching)
@@ -1023,27 +1045,14 @@ function ControllerContent({ params }: ControllerPageProps) {
             onChangeQuery={setSearchQuery}
             onSearch={(q) => handleSearch(q)}
             isSearching={isSearching}
-            placeholder="Tìm bài hát hoặc viết tắt (VD: 'cdns', 'Nơi này có anh')..."
+            placeholder="Tìm bài hát, ca sĩ hoặc gõ tắt (VD: cdns, nhnt)..."
           />
 
-          {/* Smart Acronym Matching Explanation Banner */}
-          <div className="flex items-center justify-between text-[11px] text-slate-500 px-1 -mt-2">
-            <span className="flex items-center gap-1 text-purple-400">
-              <Sparkles className="w-3 h-3" />
-              Hỗ trợ gõ tắt: <b className="text-slate-300">cdns</b> (Cắt đôi nỗi sầu), <b className="text-slate-300">nhnt</b> (Nơi này có anh)
-            </span>
-          </div>
-
-          {/* =========================================================================
-              MỤC 4: DANH MỤC GỢI Ý CHỦ ĐỀ (Trending & Curated Playlists - 1-Chạm)
-             ========================================================================= */}
+          {/* Curated Categories Carousel */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-slate-300 font-bold px-1">
-              <span className="flex items-center gap-1.5">
-                <Flame className="w-4 h-4 text-orange-400" />
-                Danh mục gợi ý (1-Chạm không cần gõ):
-              </span>
-              <span className="text-[10px] text-purple-400 font-normal">Chạm để chọn ngay</span>
+            <div className="flex items-center justify-between text-xs text-zinc-400 font-medium px-1">
+              <span>Danh mục tuyển chọn:</span>
+              <span className="text-[11px] text-zinc-500">Chạm để chọn thể loại</span>
             </div>
 
             {/* Category Pills Slider */}
@@ -1055,15 +1064,19 @@ function ControllerContent({ params }: ControllerPageProps) {
                     key={cat.id}
                     type="button"
                     onClick={() => {
-                      setSelectedCategory(cat.id);
+                      if (selectedCategory === cat.id) {
+                        setSelectedCategory("");
+                      } else {
+                        setSelectedCategory(cat.id);
+                      }
                       setSearchResults([]);
                       setSearchedKeyword("");
                       setSearchQuery("");
                     }}
-                    className={`px-3 py-1.5 rounded-full shrink-0 transition-all cursor-pointer flex items-center gap-1.5 font-semibold text-xs border active:scale-95 ${
+                    className={`px-3 py-1.5 rounded-full shrink-0 transition-all cursor-pointer flex items-center gap-1.5 font-medium text-xs active:scale-95 ${
                       isActive
-                        ? "bg-gradient-to-r from-rose-600 to-purple-600 text-white border-transparent shadow-md shadow-rose-950/40"
-                        : "bg-slate-900/90 text-slate-300 border-slate-800 hover:border-slate-700 hover:text-white"
+                        ? "bg-white text-zinc-950 font-semibold shadow-sm"
+                        : "bg-zinc-900 border border-white/[0.08] text-zinc-400 hover:text-white"
                     }`}
                   >
                     <span>{cat.icon}</span>
@@ -1074,9 +1087,9 @@ function ControllerContent({ params }: ControllerPageProps) {
             </div>
           </div>
 
-          {/* Quick Acronym Suggestions Tags */}
+          {/* Quick Acronym Tags */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
-            <span className="text-[10px] text-slate-500 font-mono shrink-0 pl-1">Viết tắt:</span>
+            <span className="text-[11px] text-zinc-500 font-mono shrink-0 pl-1">Gõ tắt:</span>
             {[
               { label: "cdns", full: "Cắt Đôi Nỗi Sầu" },
               { label: "nhnt", full: "Nơi Này Có Anh" },
@@ -1096,65 +1109,65 @@ function ControllerContent({ params }: ControllerPageProps) {
                     .then((data) => setSearchResults(data.results || []))
                     .finally(() => setIsSearching(false));
                 }}
-                className="px-2.5 py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-full text-slate-400 hover:text-white shrink-0 transition-colors cursor-pointer flex items-center gap-1 text-[11px]"
+                className="px-2.5 py-1 bg-zinc-900/80 hover:bg-zinc-800 border border-white/[0.08] rounded-lg text-zinc-400 hover:text-white shrink-0 transition-colors cursor-pointer flex items-center gap-1 text-[11px]"
               >
-                <span className="font-mono text-rose-400 font-bold">{tag.label}</span>
-                <span className="text-[9px] text-slate-500">({tag.full})</span>
+                <span className="font-mono text-zinc-200 font-bold">{tag.label}</span>
+                <span className="text-[10px] text-zinc-500">({tag.full})</span>
               </button>
             ))}
           </div>
 
-          {/* Search Results List OR Curated Playlist Songs */}
+          {/* Search Results List OR Curated Playlist Songs OR Clean Empty State */}
           <div className="space-y-3 pt-1">
-            <div className="flex items-center justify-between text-xs text-slate-400 font-semibold px-1">
-              <span>
-                {searchedKeyword ? (
-                  <>
-                    Kết quả cho: <b className="text-white">&quot;{searchedKeyword}&quot;</b> ({searchResults.length})
-                  </>
-                ) : (
-                  <>
-                    Đang hiển thị:{" "}
-                    <b className="text-rose-400">
-                      {CURATED_CATEGORIES.find((c) => c.id === selectedCategory)?.name || "Gợi ý"}
-                    </b>
-                  </>
-                )}
-              </span>
-              {searchedKeyword && (
+            {(searchedKeyword || selectedCategory) && (
+              <div className="flex items-center justify-between text-xs text-zinc-400 font-medium px-1">
+                <span>
+                  {searchedKeyword ? (
+                    <>
+                      Kết quả cho: <b className="text-white">&quot;{searchedKeyword}&quot;</b> ({searchResults.length})
+                    </>
+                  ) : (
+                    <>
+                      Danh mục:{" "}
+                      <b className="text-white">
+                        {CURATED_CATEGORIES.find((c) => c.id === selectedCategory)?.name || "Gợi ý"}
+                      </b>
+                    </>
+                  )}
+                </span>
                 <button
                   onClick={() => {
                     setSearchResults([]);
                     setSearchedKeyword("");
                     setSearchQuery("");
+                    setSelectedCategory("");
                   }}
-                  className="text-[11px] text-purple-400 hover:text-purple-300 cursor-pointer"
+                  className="text-xs text-zinc-400 hover:text-white cursor-pointer underline"
                 >
-                  Xóa tìm kiếm
+                  Xóa bộ lọc
                 </button>
-              )}
-            </div>
+              </div>
+            )}
 
             {isSearching ? (
-              <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-400 text-xs">
-                <Loader2 className="w-7 h-7 text-rose-500 animate-spin" />
-                <span>Đang tìm kiếm bài hát karaoke từ YouTube...</span>
+              <div className="py-12 flex flex-col items-center justify-center gap-3 text-zinc-500 text-xs">
+                <Loader2 className="w-6 h-6 text-zinc-300 animate-spin" />
+                <span>Đang tìm kiếm bài hát karaoke...</span>
               </div>
             ) : searchResults.length > 0 ? (
               /* YouTube Search Results */
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {searchResults.map((item) => {
                   const isAdded = addedIds.has(item.youtubeId);
                   const isFav = favoriteIdSet.has(item.youtubeId);
-                  const matchedAcronym = searchedKeyword && matchesSmartSearch(item.title, searchedKeyword);
 
                   return (
                     <div
                       key={item.youtubeId}
-                      className="p-3 bg-slate-900/90 border border-slate-800/90 hover:border-slate-700 rounded-2xl shadow-md transition-all flex gap-3 backdrop-blur-sm relative"
+                      className="p-3 bg-zinc-900/50 hover:bg-zinc-900/80 border border-white/[0.06] hover:border-white/[0.12] rounded-2xl shadow-sm transition-all flex gap-3 backdrop-blur-sm relative"
                     >
                       {/* Video Thumbnail */}
-                      <div className="relative w-28 h-20 bg-slate-950 rounded-xl overflow-hidden shrink-0 border border-slate-800">
+                      <div className="relative w-28 h-20 bg-zinc-950 rounded-xl overflow-hidden shrink-0 border border-white/[0.08]">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={item.thumbnail}
@@ -1175,7 +1188,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                           className="absolute top-1 left-1 p-1.5 bg-black/60 hover:bg-black/90 rounded-full transition-transform active:scale-125 cursor-pointer backdrop-blur-md"
                         >
                           <Heart
-                            className={`w-4 h-4 transition-colors ${
+                            className={`w-3.5 h-3.5 transition-colors ${
                               isFav ? "fill-rose-500 text-rose-500" : "text-white/80 hover:text-rose-400"
                             }`}
                           />
@@ -1185,19 +1198,17 @@ function ControllerContent({ params }: ControllerPageProps) {
                       {/* Video Details & Action Buttons */}
                       <div className="flex-1 flex flex-col justify-between overflow-hidden">
                         <div>
-                          <div className="flex items-center gap-1.5">
-                            <h4 className="text-xs font-bold text-white line-clamp-2 leading-tight">
-                              {item.title}
-                            </h4>
-                          </div>
-                          <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                          <h4 className="text-xs font-semibold text-white line-clamp-2 leading-tight">
+                            {item.title}
+                          </h4>
+                          <p className="text-[11px] text-zinc-400 truncate mt-0.5 font-normal">
                             {item.channelTitle}
                           </p>
 
                           {/* Acronym Match Badge */}
                           {searchedKeyword && (
-                            <div className="text-[10px] text-purple-400 font-mono mt-0.5 truncate">
-                              Chữ cái đầu: <span className="text-slate-300">{extractAcronym(item.title).substring(0, 16)}</span>
+                            <div className="text-[10px] text-zinc-500 font-mono mt-0.5 truncate">
+                              Chữ cái đầu: <span className="text-zinc-300">{extractAcronym(item.title).substring(0, 16)}</span>
                             </div>
                           )}
                         </div>
@@ -1205,10 +1216,10 @@ function ControllerContent({ params }: ControllerPageProps) {
                         <div className="flex items-center gap-2 pt-2">
                           <button
                             onClick={() => handleSelectSong(item, false)}
-                            className={`flex-1 py-1.5 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                            className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                               isAdded
-                                ? "bg-slate-800 text-slate-400 border border-slate-700"
-                                : "bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/30 active:scale-95"
+                                ? "bg-zinc-800 text-zinc-400 border border-white/[0.08]"
+                                : "bg-white hover:bg-zinc-200 text-zinc-950 shadow-sm active:scale-95"
                             }`}
                           >
                             {isAdded ? (
@@ -1227,9 +1238,9 @@ function ControllerContent({ params }: ControllerPageProps) {
                           <button
                             onClick={() => handleSelectSong(item, true)}
                             title="Ưu tiên bài này hát ngay sau bài hiện tại"
-                            className="py-1.5 px-2.5 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                            className="py-1.5 px-2.5 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-200 rounded-xl text-xs font-medium flex items-center gap-1 transition-all cursor-pointer active:scale-95"
                           >
-                            <Zap className="w-3.5 h-3.5 text-purple-400" />
+                            <Zap className="w-3.5 h-3.5 text-amber-400" />
                             <span>Ưu tiên</span>
                           </button>
                         </div>
@@ -1238,9 +1249,9 @@ function ControllerContent({ params }: ControllerPageProps) {
                   );
                 })}
               </div>
-            ) : (
+            ) : selectedCategory ? (
               /* Curated Songs for Selected Category (1-Touch queuing) */
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {(CURATED_CATEGORIES.find((c) => c.id === selectedCategory)?.songs || []).map((song) => {
                   const isAdded = addedIds.has(song.youtubeId);
                   const isFav = favoriteIdSet.has(song.youtubeId);
@@ -1248,10 +1259,10 @@ function ControllerContent({ params }: ControllerPageProps) {
                   return (
                     <div
                       key={song.youtubeId}
-                      className="p-3 bg-slate-900/90 border border-slate-800/90 hover:border-slate-700 rounded-2xl shadow-md transition-all flex gap-3 backdrop-blur-sm relative"
+                      className="p-3 bg-zinc-900/50 hover:bg-zinc-900/80 border border-white/[0.06] hover:border-white/[0.12] rounded-2xl shadow-sm transition-all flex gap-3 backdrop-blur-sm relative"
                     >
                       {/* Video Thumbnail */}
-                      <div className="relative w-28 h-20 bg-slate-950 rounded-xl overflow-hidden shrink-0 border border-slate-800">
+                      <div className="relative w-28 h-20 bg-zinc-950 rounded-xl overflow-hidden shrink-0 border border-white/[0.08]">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={song.thumbnail}
@@ -1272,7 +1283,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                           className="absolute top-1 left-1 p-1.5 bg-black/60 hover:bg-black/90 rounded-full transition-transform active:scale-125 cursor-pointer backdrop-blur-md"
                         >
                           <Heart
-                            className={`w-4 h-4 transition-colors ${
+                            className={`w-3.5 h-3.5 transition-colors ${
                               isFav ? "fill-rose-500 text-rose-500" : "text-white/80 hover:text-rose-400"
                             }`}
                           />
@@ -1282,12 +1293,10 @@ function ControllerContent({ params }: ControllerPageProps) {
                       {/* Video Details & Action Buttons */}
                       <div className="flex-1 flex flex-col justify-between overflow-hidden">
                         <div>
-                          <div className="flex items-center gap-1.5">
-                            <h4 className="text-xs font-bold text-white line-clamp-2 leading-tight">
-                              {song.title}
-                            </h4>
-                          </div>
-                          <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                          <h4 className="text-xs font-semibold text-white line-clamp-2 leading-tight">
+                            {song.title}
+                          </h4>
+                          <p className="text-[11px] text-zinc-400 truncate mt-0.5 font-normal">
                             {song.artist}
                           </p>
                         </div>
@@ -1295,10 +1304,10 @@ function ControllerContent({ params }: ControllerPageProps) {
                         <div className="flex items-center gap-2 pt-2">
                           <button
                             onClick={() => handleSelectSong(song, false)}
-                            className={`flex-1 py-1.5 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                            className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                               isAdded
-                                ? "bg-slate-800 text-slate-400 border border-slate-700"
-                                : "bg-gradient-to-r from-rose-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white shadow-md shadow-rose-950/40 active:scale-95"
+                                ? "bg-zinc-800 text-zinc-400 border border-white/[0.08]"
+                                : "bg-white hover:bg-zinc-200 text-zinc-950 shadow-sm active:scale-95"
                             }`}
                           >
                             {isAdded ? (
@@ -1317,9 +1326,9 @@ function ControllerContent({ params }: ControllerPageProps) {
                           <button
                             onClick={() => handleSelectSong(song, true)}
                             title="Ưu tiên bài này hát ngay sau bài hiện tại"
-                            className="py-1.5 px-2.5 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                            className="py-1.5 px-2.5 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-200 rounded-xl text-xs font-medium flex items-center gap-1 transition-all cursor-pointer active:scale-95"
                           >
-                            <Zap className="w-3.5 h-3.5 text-purple-400" />
+                            <Zap className="w-3.5 h-3.5 text-amber-400" />
                             <span>Ưu tiên</span>
                           </button>
                         </div>
@@ -1327,6 +1336,19 @@ function ControllerContent({ params }: ControllerPageProps) {
                     </div>
                   );
                 })}
+              </div>
+            ) : (
+              /* Clean Empty State when user first enters the room */
+              <div className="py-12 px-4 rounded-2xl bg-zinc-900/30 border border-white/[0.06] text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-white/[0.08] flex items-center justify-center mx-auto text-zinc-400">
+                  <Search className="w-5 h-5 text-zinc-400" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-semibold text-white">Bắt đầu chọn bài hát</h4>
+                  <p className="text-xs text-zinc-400 max-w-xs mx-auto leading-relaxed">
+                    Gõ tên bài hát hoặc ca sĩ vào thanh tìm kiếm, hoặc chạm vào danh mục thể loại ở trên để tìm bài nhanh.
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -1340,11 +1362,11 @@ function ControllerContent({ params }: ControllerPageProps) {
         <main className="flex-1 p-4 space-y-4">
           <div className="flex items-center justify-between pb-1">
             <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                 <Heart className="w-4 h-4 text-rose-500 fill-rose-500" />
                 <span>Danh sách Bài tủ ({favorites.length})</span>
               </h3>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-zinc-400">
                 Lưu trên điện thoại của bạn • Chọn bài tức thì
               </p>
             </div>
@@ -1353,18 +1375,18 @@ function ControllerContent({ params }: ControllerPageProps) {
           {/* Search within Favorites (Smart Acronym Search) */}
           {favorites.length > 0 && (
             <div className="relative flex items-center">
-              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 pointer-events-none" />
+              <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3.5 pointer-events-none" />
               <input
                 type="text"
                 value={favoriteSearchQuery}
                 onChange={(e) => setFavoriteSearchQuery(e.target.value)}
                 placeholder="Lọc bài tủ theo tên hoặc viết tắt..."
-                className="w-full bg-slate-900 border border-slate-800 focus:border-rose-500 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                className="w-full bg-zinc-900/60 border border-white/[0.08] focus:border-white/30 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none transition-colors"
               />
               {favoriteSearchQuery && (
                 <button
                   onClick={() => setFavoriteSearchQuery("")}
-                  className="absolute right-2.5 text-slate-400 hover:text-white cursor-pointer"
+                  className="absolute right-2.5 text-zinc-400 hover:text-white cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -1374,14 +1396,14 @@ function ControllerContent({ params }: ControllerPageProps) {
 
           {/* List of Favorite Songs */}
           {filteredFavorites.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {filteredFavorites.map((fav) => (
                 <div
                   key={fav.youtubeId}
-                  className="p-3 bg-slate-900/90 border border-slate-800 rounded-2xl flex gap-3 shadow-md backdrop-blur-sm"
+                  className="p-3 bg-zinc-900/50 hover:bg-zinc-900/80 border border-white/[0.06] hover:border-white/[0.12] rounded-2xl flex gap-3 shadow-sm backdrop-blur-sm transition-all"
                 >
                   {/* Thumbnail with un-favorite button */}
-                  <div className="relative w-24 h-16 bg-slate-950 rounded-xl overflow-hidden shrink-0 border border-slate-800">
+                  <div className="relative w-28 h-20 bg-zinc-950 rounded-xl overflow-hidden shrink-0 border border-white/[0.08]">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={fav.thumbnail}
@@ -1391,7 +1413,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                     <button
                       onClick={(e) => handleToggleFavorite(fav, e)}
                       title="Gỡ khỏi bài tủ"
-                      className="absolute top-1 left-1 p-1 bg-black/60 rounded-full cursor-pointer hover:bg-black/90"
+                      className="absolute top-1 left-1 p-1.5 bg-black/60 rounded-full cursor-pointer hover:bg-black/90 backdrop-blur-md transition-transform active:scale-125"
                     >
                       <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
                     </button>
@@ -1400,26 +1422,26 @@ function ControllerContent({ params }: ControllerPageProps) {
                   {/* Title & Actions */}
                   <div className="flex-1 flex flex-col justify-between overflow-hidden">
                     <div>
-                      <h4 className="text-xs font-bold text-white line-clamp-2 leading-tight">
+                      <h4 className="text-xs font-semibold text-white line-clamp-2 leading-tight">
                         {fav.title}
                       </h4>
-                      <p className="text-[10px] text-slate-400 truncate mt-0.5">{fav.artist}</p>
+                      <p className="text-[11px] text-zinc-400 truncate mt-0.5">{fav.artist}</p>
                     </div>
 
-                    <div className="flex items-center gap-1.5 pt-1.5">
+                    <div className="flex items-center gap-2 pt-2">
                       <button
                         onClick={() => handleSelectSong(fav, false)}
-                        className="flex-1 py-1 px-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-sm active:scale-95"
+                        className="flex-1 py-1.5 px-3 bg-white hover:bg-zinc-200 text-zinc-950 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
                       >
-                        <PlusCircle className="w-3 h-3" />
+                        <PlusCircle className="w-3.5 h-3.5" />
                         <span>Hát ngay</span>
                       </button>
 
                       <button
                         onClick={() => handleSelectSong(fav, true)}
-                        className="py-1 px-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 rounded-lg text-xs font-semibold flex items-center gap-0.5 transition-all cursor-pointer active:scale-95"
+                        className="py-1.5 px-2.5 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-200 rounded-xl text-xs font-medium flex items-center gap-1 transition-all cursor-pointer active:scale-95"
                       >
-                        <Zap className="w-3 h-3 text-purple-400" />
+                        <Zap className="w-3.5 h-3.5 text-amber-400" />
                         <span>Ưu tiên</span>
                       </button>
                     </div>
@@ -1428,21 +1450,21 @@ function ControllerContent({ params }: ControllerPageProps) {
               ))}
             </div>
           ) : favorites.length > 0 ? (
-            <div className="p-8 bg-slate-900/40 border border-slate-800/60 rounded-2xl text-center space-y-2">
-              <Search className="w-6 h-6 text-slate-600 mx-auto" />
-              <div className="text-xs text-slate-400 font-medium">
+            <div className="p-8 bg-zinc-900/40 border border-white/[0.06] rounded-2xl text-center space-y-2">
+              <Search className="w-6 h-6 text-zinc-600 mx-auto" />
+              <div className="text-xs text-zinc-400 font-medium">
                 Không tìm thấy bài tủ nào khớp với &quot;{favoriteSearchQuery}&quot;.
               </div>
             </div>
           ) : (
-            <div className="p-8 bg-slate-900/40 border border-slate-800/60 rounded-2xl text-center space-y-3">
+            <div className="p-8 bg-zinc-900/40 border border-white/[0.06] rounded-2xl text-center space-y-3">
               <div className="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto text-rose-500">
                 <Heart className="w-6 h-6 fill-rose-500/30" />
               </div>
               <div className="space-y-1">
-                <h4 className="text-sm font-bold text-white">Chưa có bài tủ nào</h4>
-                <p className="text-xs text-slate-400 max-w-xs mx-auto">
-                  Hãy bấm vào biểu tượng trái tim <Heart className="w-3 h-3 inline text-rose-500 fill-rose-500" /> ở bất kỳ bài hát nào để lưu lại danh sách các bài bạn thích hát nhất.
+                <h4 className="text-sm font-semibold text-white">Chưa có bài tủ nào</h4>
+                <p className="text-xs text-zinc-400 max-w-xs mx-auto leading-relaxed">
+                  Hãy bấm biểu tượng trái tim <Heart className="w-3 h-3 inline text-rose-500 fill-rose-500" /> ở bất kỳ bài hát nào để lưu lại danh sách các bài bạn thích hát nhất.
                 </p>
               </div>
 
@@ -1460,9 +1482,9 @@ function ControllerContent({ params }: ControllerPageProps) {
                   setFavorites(getFavorites());
                   showToast("❤️ Đã thêm 'Cắt Đôi Nỗi Sầu' vào Bài tủ!");
                 }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-rose-300 rounded-xl transition-colors cursor-pointer border border-slate-700"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium text-zinc-300 hover:text-white rounded-xl transition-colors cursor-pointer border border-white/[0.08]"
               >
-                <PlusCircle className="w-3.5 h-3.5 text-rose-400" />
+                <PlusCircle className="w-3.5 h-3.5 text-zinc-400" />
                 <span>Thêm thử &quot;Cắt Đôi Nỗi Sầu&quot; vào Bài tủ</span>
               </button>
             </div>
@@ -1476,11 +1498,11 @@ function ControllerContent({ params }: ControllerPageProps) {
       {activeTab === "queue" && (
         <main className="flex-1 p-4 space-y-4">
           <div className="flex items-center justify-between pb-1">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <ListMusic className="w-4 h-4 text-purple-400" />
+            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <ListMusic className="w-4 h-4 text-zinc-300" />
               <span>Hàng đợi bài hát ({queue.length})</span>
             </h3>
-            <span className="text-[11px] text-slate-400">Tự động chuyển bài khi hết</span>
+            <span className="text-[11px] text-zinc-500 font-mono">Tự động chuyển bài</span>
           </div>
 
           {queue.length > 0 ? (
@@ -1494,25 +1516,25 @@ function ControllerContent({ params }: ControllerPageProps) {
                 return (
                   <div
                     key={item.id}
-                    className={`p-3 bg-slate-900/90 border rounded-2xl flex items-center justify-between gap-3 text-xs transition-colors ${
-                      isMine ? "border-rose-500/30 bg-rose-950/10" : "border-slate-800"
+                    className={`p-3 bg-zinc-900/50 border rounded-2xl flex items-center justify-between gap-3 text-xs transition-colors backdrop-blur-sm ${
+                      isMine ? "border-amber-500/30 bg-amber-950/10" : "border-white/[0.06]"
                     }`}
                   >
                     <div className="flex items-center gap-3 truncate">
-                      <span className="w-6 h-6 rounded-full bg-slate-800 text-slate-300 font-bold flex items-center justify-center text-xs shrink-0 font-mono">
-                        {idx + 1}
+                      <span className="w-7 h-7 rounded-lg bg-zinc-800 text-zinc-300 font-mono text-xs font-medium flex items-center justify-center shrink-0 border border-white/[0.06]">
+                        {(idx + 1).toString().padStart(2, "0")}
                       </span>
                       <div className="truncate">
-                        <div className="font-bold text-white truncate flex items-center gap-1.5">
+                        <div className="font-semibold text-white truncate flex items-center gap-1.5">
                           <span className="truncate">{item.title}</span>
                           {isMine && (
-                            <span className="shrink-0 text-[9px] px-1.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-full font-bold">
-                              Của bạn (Toàn quyền)
+                            <span className="shrink-0 text-[10px] px-2 py-0.5 bg-amber-400/10 text-amber-300 border border-amber-400/20 rounded-md font-medium">
+                              Của bạn
                             </span>
                           )}
                         </div>
-                        <div className="text-[11px] text-slate-400 truncate">
-                          {item.artist} • do <b className="text-purple-300">{item.requestedBy}</b>
+                        <div className="text-[11px] text-zinc-400 truncate mt-0.5">
+                          {item.artist} • do <b className="text-zinc-200 font-medium">{item.requestedBy}</b>
                         </div>
                       </div>
                     </div>
@@ -1532,11 +1554,11 @@ function ControllerContent({ params }: ControllerPageProps) {
                               e
                             )
                           }
-                          className="p-1.5 text-slate-400 hover:text-rose-400 cursor-pointer"
+                          className="p-1.5 text-zinc-500 hover:text-rose-400 cursor-pointer transition-colors"
                         >
                           <Heart
                             className={`w-4 h-4 ${
-                              isFav ? "fill-rose-500 text-rose-500" : "text-slate-400"
+                              isFav ? "fill-rose-500 text-rose-500" : "text-zinc-500"
                             }`}
                           />
                         </button>
@@ -1546,7 +1568,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                       {canPrioritize ? (
                         <button
                           onClick={() => handlePrioritizeQueue(item.id, item.title)}
-                          className="p-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 rounded-xl transition-all cursor-pointer active:scale-95"
+                          className="p-2 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-amber-400 rounded-xl transition-all cursor-pointer active:scale-95"
                           title={isMine ? "Ưu tiên bài của bạn lên tiếp theo" : "Ưu tiên bài hát (Quyền Chủ phòng)"}
                         >
                           <Zap className="w-4 h-4" />
@@ -1554,7 +1576,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                       ) : (
                         <div
                           title="Bài của người khác (Được bảo vệ)"
-                          className="p-2 text-slate-600 cursor-not-allowed opacity-40"
+                          className="p-2 text-zinc-600 cursor-not-allowed opacity-40"
                         >
                           <Lock className="w-3.5 h-3.5" />
                         </div>
@@ -1564,7 +1586,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                       {canDelete && (
                         <button
                           onClick={() => handleRemoveQueue(item.id, item.title)}
-                          className="p-2 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 rounded-xl transition-all cursor-pointer active:scale-95"
+                          className="p-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 rounded-xl transition-all cursor-pointer active:scale-95"
                           title={isMine ? "Xóa bài do bạn đặt" : "Xóa bài (Quyền Chủ phòng)"}
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1576,9 +1598,9 @@ function ControllerContent({ params }: ControllerPageProps) {
               })}
             </div>
           ) : (
-            <div className="p-8 bg-slate-900/40 border border-slate-800/60 rounded-2xl text-center space-y-2">
-              <ListMusic className="w-8 h-8 text-slate-600 mx-auto" />
-              <div className="text-xs text-slate-400 font-medium">
+            <div className="p-8 bg-zinc-900/40 border border-white/[0.06] rounded-2xl text-center space-y-2">
+              <ListMusic className="w-8 h-8 text-zinc-600 mx-auto" />
+              <div className="text-xs text-zinc-400 font-medium">
                 Hàng đợi đang trống. Hãy chuyển sang tab &quot;Tìm bài&quot; hoặc &quot;Bài tủ&quot; để thêm bài hát mới!
               </div>
             </div>
@@ -1592,19 +1614,19 @@ function ControllerContent({ params }: ControllerPageProps) {
       {activeTab === "soundboard" && (
         <main className="flex-1 p-4 space-y-4">
           {/* 1. BẮN CHỮ DANMAKU (Tối đa 40 ký tự) */}
-          <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-2xl space-y-3 shadow-xl">
+          <div className="p-4 bg-zinc-900/50 border border-white/[0.08] rounded-2xl space-y-3.5 backdrop-blur-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Radio className="w-4 h-4 text-rose-500 animate-pulse" />
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
-                  BẮN CHỮ LÊN TV (DANMAKU)
+                <Radio className="w-4 h-4 text-rose-400" />
+                <span className="text-xs font-semibold text-zinc-200">
+                  Bắn chữ lên TV (Danmaku)
                 </span>
               </div>
-              <span className="text-[10px] text-rose-400 font-mono font-semibold">Tối đa 40 ký tự</span>
+              <span className="text-[10px] text-zinc-500 font-mono">Tối đa 40 ký tự</span>
             </div>
 
-            <p className="text-xs text-slate-400">
-              Nhập lời cổ vũ hoặc tin nhắn vui nhộn để chữ bay ngang qua màn hình TV!
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Nhập lời cổ vũ hoặc tin nhắn vui nhộn để chữ bay ngang qua màn hình TV.
             </p>
 
             <form
@@ -1621,11 +1643,11 @@ function ControllerContent({ params }: ControllerPageProps) {
                   value={reactionText}
                   onChange={(e) => setReactionText(e.target.value)}
                   placeholder="Nhập lời cổ vũ (vd: Hát hay quá idol ơi!)..."
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none pr-14 transition-all"
+                  className="w-full bg-zinc-950 border border-white/[0.08] focus:border-white/30 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 outline-none pr-14 transition-colors"
                 />
                 <span
-                  className={`absolute right-3 top-3 text-[10px] font-mono ${
-                    reactionText.length >= 35 ? "text-amber-400 font-bold" : "text-slate-500"
+                  className={`absolute right-3 top-2.5 text-[10px] font-mono ${
+                    reactionText.length >= 35 ? "text-amber-400 font-medium" : "text-zinc-500"
                   }`}
                 >
                   {reactionText.length}/40
@@ -1639,22 +1661,22 @@ function ControllerContent({ params }: ControllerPageProps) {
                   value={senderName}
                   onChange={(e) => setSenderName(e.target.value)}
                   placeholder="Tên của bạn"
-                  className="w-28 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-slate-700"
+                  className="w-28 bg-zinc-950 border border-white/[0.08] rounded-xl px-2.5 py-2 text-xs text-zinc-200 placeholder-zinc-500 outline-none focus:border-white/30"
                 />
                 <button
                   type="submit"
                   disabled={!reactionText.trim()}
-                  className="flex-1 py-2 px-4 bg-gradient-to-r from-rose-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-rose-900/30 cursor-pointer active:scale-95"
+                  className="flex-1 py-2 px-4 bg-white hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-950 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer active:scale-95"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>Bắn chữ lên TV</span>
+                  <span>Bắn lên TV</span>
                 </button>
               </div>
             </form>
 
             {/* Quick suggested Danmaku phrases */}
             <div className="pt-1">
-              <div className="text-[10px] text-slate-400 font-medium mb-1.5">Gợi ý nhanh:</div>
+              <div className="text-[10px] text-zinc-500 font-medium mb-1.5">Gợi ý nhanh:</div>
               <div className="flex flex-wrap gap-1.5">
                 {[
                   "Hát hay quá bạn ơi! 🎤",
@@ -1667,7 +1689,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                     key={preset}
                     type="button"
                     onClick={() => handleSendReaction("text", preset)}
-                    className="text-[11px] bg-slate-950/80 hover:bg-slate-800 text-slate-300 border border-slate-800/80 hover:border-slate-700 px-2.5 py-1 rounded-lg transition-all cursor-pointer active:scale-95"
+                    className="text-[11px] bg-zinc-950 hover:bg-zinc-800 text-zinc-300 border border-white/[0.06] hover:border-white/[0.12] px-2.5 py-1 rounded-lg transition-colors cursor-pointer active:scale-95"
                   >
                     {preset}
                   </button>
@@ -1677,19 +1699,19 @@ function ControllerContent({ params }: ControllerPageProps) {
           </div>
 
           {/* 2. BẮN CẢM XÚC NHANH: 🔥, ❤️, 👏, 🍻, 💯 */}
-          <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-2xl space-y-3 shadow-xl">
+          <div className="p-4 bg-zinc-900/50 border border-white/[0.08] rounded-2xl space-y-3.5 backdrop-blur-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Flame className="w-4 h-4 text-amber-500" />
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
-                  BẮN CẢM XÚC NHANH (LIVE REACTIONS)
+                <Flame className="w-4 h-4 text-amber-400" />
+                <span className="text-xs font-semibold text-zinc-200">
+                  Cảm xúc trực tiếp
                 </span>
               </div>
-              <span className="text-[10px] text-slate-400 font-mono">Bay lơ lửng TV</span>
+              <span className="text-[10px] text-zinc-500 font-mono">Bay lơ lửng TV</span>
             </div>
 
-            <p className="text-xs text-slate-400">
-              Chạm để bắn emoji hoạt họa bay lơ lửng từ dưới màn hình TV lên trên:
+            <p className="text-xs text-zinc-400">
+              Chạm để bắn biểu tượng cảm xúc bay lên màn hình TV:
             </p>
 
             <div className="grid grid-cols-5 gap-2 pt-1">
@@ -1703,12 +1725,12 @@ function ControllerContent({ params }: ControllerPageProps) {
                 <button
                   key={item.emoji}
                   onClick={() => handleSendReaction("emoji", item.emoji)}
-                  className="p-3 bg-slate-950 hover:bg-slate-800/90 border border-slate-800 hover:border-rose-500/50 rounded-2xl flex flex-col items-center gap-1 active:scale-90 transition-all cursor-pointer shadow-lg group"
+                  className="p-3 bg-zinc-950 hover:bg-zinc-800/80 border border-white/[0.06] hover:border-white/[0.15] rounded-2xl flex flex-col items-center gap-1 active:scale-90 transition-all cursor-pointer group"
                 >
-                  <span className="text-2xl group-hover:scale-125 transition-transform duration-200">
+                  <span className="text-2xl group-hover:scale-115 transition-transform duration-200">
                     {item.emoji}
                   </span>
-                  <span className="text-[9px] text-slate-400 group-hover:text-slate-200 font-medium">
+                  <span className="text-[10px] text-zinc-400 group-hover:text-zinc-200 font-medium">
                     {item.label}
                   </span>
                 </button>
@@ -1717,29 +1739,29 @@ function ControllerContent({ params }: ControllerPageProps) {
           </div>
 
           {/* 3. BỘ CHỈNH ÂM THANH (DSP: TONE & TÁCH LỜI CA SĨ) */}
-          <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-2xl space-y-3.5 shadow-xl">
+          <div className="p-4 bg-zinc-900/50 border border-white/[0.08] rounded-2xl space-y-3.5 backdrop-blur-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Volume2 className="w-4 h-4 text-purple-400" />
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
-                  BỘ XỬ LÝ ÂM THANH (WEB AUDIO)
+                <Volume2 className="w-4 h-4 text-zinc-300" />
+                <span className="text-xs font-semibold text-zinc-200">
+                  Bộ xử lý âm thanh
                 </span>
               </div>
-              <span className="text-[10px] text-purple-400 font-mono font-semibold">Stereo Splitter</span>
+              <span className="text-[10px] text-zinc-500 font-mono">Stereo Splitter</span>
             </div>
 
             {/* A. Chỉnh Tone (Key Transpose: -4 đến +4 nửa cung) */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-300 font-semibold flex items-center gap-1.5">
-                  <Music className="w-3.5 h-3.5 text-rose-400" />
+                <span className="text-zinc-300 font-medium flex items-center gap-1.5">
+                  <Music className="w-3.5 h-3.5 text-zinc-400" />
                   Chỉnh Tone (Cao độ):
                 </span>
                 <span
-                  className={`font-mono font-bold px-2.5 py-0.5 rounded-md text-xs border ${
+                  className={`font-mono font-medium px-2.5 py-0.5 rounded-lg text-xs border ${
                     pitchShift === 0
-                      ? "bg-slate-800 text-slate-300 border-slate-700"
-                      : "bg-purple-950 text-purple-300 border-purple-500/60 shadow-lg shadow-purple-950/40"
+                      ? "bg-zinc-800 text-zinc-300 border-white/[0.08]"
+                      : "bg-amber-950/60 text-amber-300 border-amber-500/30"
                   }`}
                 >
                   {pitchShift === 0 ? "Tone [Gốc]" : pitchShift > 0 ? `Tone [+${pitchShift}]` : `Tone [${pitchShift}]`}
@@ -1751,7 +1773,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                   type="button"
                   onClick={() => handleToneChange("down")}
                   disabled={pitchShift <= -4}
-                  className="py-2.5 px-3 bg-slate-950 hover:bg-slate-800 disabled:opacity-30 border border-slate-800 hover:border-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-95"
+                  className="py-2.5 px-3 bg-zinc-950 hover:bg-zinc-800 disabled:opacity-30 border border-white/[0.08] hover:border-white/[0.15] text-zinc-200 rounded-xl text-xs font-medium transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-95"
                 >
                   <span>Tone [-]</span>
                 </button>
@@ -1759,10 +1781,10 @@ function ControllerContent({ params }: ControllerPageProps) {
                 <button
                   type="button"
                   onClick={() => handleToneChange("reset")}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 border active:scale-95 ${
+                  className={`py-2.5 px-3 rounded-xl text-xs font-medium transition-all cursor-pointer flex items-center justify-center gap-1 border active:scale-95 ${
                     pitchShift === 0
-                      ? "bg-slate-800 text-white border-slate-700 shadow-md"
-                      : "bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800"
+                      ? "bg-zinc-800 text-white border-white/[0.12]"
+                      : "bg-zinc-950 text-zinc-300 border-white/[0.08] hover:bg-zinc-800"
                   }`}
                 >
                   <span>Tone [Gốc]</span>
@@ -1772,7 +1794,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                   type="button"
                   onClick={() => handleToneChange("up")}
                   disabled={pitchShift >= 4}
-                  className="py-2.5 px-3 bg-slate-950 hover:bg-slate-800 disabled:opacity-30 border border-slate-800 hover:border-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-95"
+                  className="py-2.5 px-3 bg-zinc-950 hover:bg-zinc-800 disabled:opacity-30 border border-white/[0.08] hover:border-white/[0.15] text-zinc-200 rounded-xl text-xs font-medium transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-95"
                 >
                   <span>Tone [+]</span>
                 </button>
@@ -1780,34 +1802,34 @@ function ControllerContent({ params }: ControllerPageProps) {
             </div>
 
             {/* B. Toggle Ca sĩ / Beat */}
-            <div className="space-y-1.5 pt-2 border-t border-slate-800/80">
+            <div className="space-y-1.5 pt-2 border-t border-white/[0.06]">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-300 font-semibold flex items-center gap-1.5">
-                  <Mic2 className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="text-zinc-300 font-medium flex items-center gap-1.5">
+                  <Mic2 className="w-3.5 h-3.5 text-zinc-400" />
                   Giọng ca sĩ (Stereo Splitter):
                 </span>
-                <span className="text-[10px] text-slate-400 font-mono">Trái: Beat • Phải: Vocal</span>
+                <span className="text-[10px] text-zinc-500 font-mono">Trái: Beat • Phải: Vocal</span>
               </div>
 
               <button
                 type="button"
                 onClick={handleToggleVocal}
-                className={`w-full py-3 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between border shadow-lg active:scale-98 ${
+                className={`w-full py-3 px-4 rounded-xl text-xs font-medium transition-all cursor-pointer flex items-center justify-between border active:scale-98 ${
                   vocalMuted
-                    ? "bg-amber-950/80 border-amber-500/60 text-amber-300 shadow-amber-950/40"
-                    : "bg-emerald-950/80 border-emerald-500/60 text-emerald-300 shadow-emerald-950/40"
+                    ? "bg-amber-950/40 border-amber-500/40 text-amber-300"
+                    : "bg-emerald-950/40 border-emerald-500/40 text-emerald-300"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
                   <span className="text-xl">{vocalMuted ? "🎧" : "🎤"}</span>
                   <div className="text-left">
-                    <div>{vocalMuted ? "Đang bật: CHẾ ĐỘ BEAT (Tắt ca sĩ)" : "Đang bật: CÓ TIẾNG CA SĨ"}</div>
-                    <div className="text-[10px] font-normal opacity-80">
+                    <div className="font-semibold">{vocalMuted ? "Đang bật: Chế độ Beat (Tắt ca sĩ)" : "Đang bật: Có tiếng ca sĩ"}</div>
+                    <div className="text-[10px] text-zinc-400">
                       {vocalMuted ? "Nhân đôi kênh Trái (Beat) ra 2 loa" : "Phát chuẩn Stereo cả 2 kênh"}
                     </div>
                   </div>
                 </div>
-                <span className="px-2.5 py-1 bg-black/40 rounded-lg text-[10px] font-mono border border-white/20 whitespace-nowrap">
+                <span className="px-2.5 py-1 bg-black/40 rounded-lg text-[10px] font-mono border border-white/10 whitespace-nowrap">
                   Chuyển {vocalMuted ? "Ca sĩ" : "Beat"}
                 </span>
               </button>
@@ -1815,38 +1837,38 @@ function ControllerContent({ params }: ControllerPageProps) {
           </div>
 
           {/* 4. HIỆU ỨNG ÂM THANH TV (Soundboard) */}
-          <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-2xl space-y-3">
+          <div className="p-4 bg-zinc-900/50 border border-white/[0.08] rounded-2xl space-y-3.5 backdrop-blur-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <PartyPopper className="w-4 h-4 text-purple-400" />
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                  HIỆU ỨNG ÂM THANH TV
+                <PartyPopper className="w-4 h-4 text-zinc-300" />
+                <span className="text-xs font-semibold text-zinc-200">
+                  Hiệu ứng âm thanh TV
                 </span>
               </div>
-              <span className="text-[10px] text-slate-400 font-mono">Loa TV</span>
+              <span className="text-[10px] text-zinc-500 font-mono">Loa TV</span>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={() => sendCheer("applause")}
-                className="p-3 bg-slate-950/90 hover:bg-slate-800 border border-slate-800 rounded-xl flex flex-col items-center gap-1 text-slate-200 active:scale-95 transition-all cursor-pointer"
+                className="p-3 bg-zinc-950 hover:bg-zinc-800 border border-white/[0.06] hover:border-white/[0.12] rounded-xl flex flex-col items-center gap-1 text-zinc-200 active:scale-95 transition-all cursor-pointer"
               >
                 <span className="text-2xl">👏</span>
-                <span className="text-[11px] font-bold">Vỗ tay</span>
+                <span className="text-[11px] font-medium">Vỗ tay</span>
               </button>
               <button
                 onClick={() => sendCheer("whistle")}
-                className="p-3 bg-slate-950/90 hover:bg-slate-800 border border-slate-800 rounded-xl flex flex-col items-center gap-1 text-slate-200 active:scale-95 transition-all cursor-pointer"
+                className="p-3 bg-zinc-950 hover:bg-zinc-800 border border-white/[0.06] hover:border-white/[0.12] rounded-xl flex flex-col items-center gap-1 text-zinc-200 active:scale-95 transition-all cursor-pointer"
               >
                 <span className="text-2xl">📣</span>
-                <span className="text-[11px] font-bold">Huýt sáo</span>
+                <span className="text-[11px] font-medium">Huýt sáo</span>
               </button>
               <button
                 onClick={() => sendCheer("cheer")}
-                className="p-3 bg-slate-950/90 hover:bg-slate-800 border border-slate-800 rounded-xl flex flex-col items-center gap-1 text-slate-200 active:scale-95 transition-all cursor-pointer"
+                className="p-3 bg-zinc-950 hover:bg-zinc-800 border border-white/[0.06] hover:border-white/[0.12] rounded-xl flex flex-col items-center gap-1 text-zinc-200 active:scale-95 transition-all cursor-pointer"
               >
                 <span className="text-2xl">🥳</span>
-                <span className="text-[11px] font-bold">Reo hò</span>
+                <span className="text-[11px] font-medium">Reo hò</span>
               </button>
             </div>
           </div>
@@ -1858,21 +1880,21 @@ function ControllerContent({ params }: ControllerPageProps) {
           Allows instant reaction from any tab without interrupting search/queue
          ========================================================================= */}
       <div className="fixed bottom-28 left-0 right-0 max-w-md mx-auto px-4 pointer-events-none z-30">
-        <div className="pointer-events-auto bg-slate-950/90 backdrop-blur-xl border border-slate-800/80 rounded-full px-3 py-1.5 shadow-2xl flex items-center justify-between gap-1 max-w-xs mx-auto">
+        <div className="pointer-events-auto bg-zinc-900/90 backdrop-blur-2xl border border-white/[0.1] rounded-full px-3 py-1.5 shadow-2xl flex items-center justify-between gap-1 max-w-xs mx-auto">
           {["🔥", "❤️", "👏", "🍻", "💯"].map((em) => (
             <button
               key={em}
               onClick={() => handleSendReaction("emoji", em)}
-              className="p-1.5 hover:bg-slate-800/80 active:scale-125 rounded-full text-lg transition-transform cursor-pointer"
+              className="p-1.5 hover:bg-white/[0.08] active:scale-125 rounded-full text-lg transition-transform cursor-pointer"
               title={`Bắn ${em} lên TV`}
             >
               {em}
             </button>
           ))}
-          <div className="h-4 w-px bg-slate-800 mx-1" />
+          <div className="h-4 w-px bg-white/[0.1] mx-1" />
           <button
             onClick={() => setActiveTab("soundboard")}
-            className="text-[10px] font-bold text-rose-400 hover:text-rose-300 px-1.5 py-0.5 rounded transition-colors whitespace-nowrap cursor-pointer"
+            className="text-[10px] font-medium text-zinc-300 hover:text-white px-1.5 py-0.5 rounded transition-colors whitespace-nowrap cursor-pointer"
             title="Mở bảng bắn chữ Danmaku"
           >
             Bắn chữ 💬
@@ -1881,29 +1903,29 @@ function ControllerContent({ params }: ControllerPageProps) {
       </div>
 
       {/* =========================================================================
-          PINNED MINI PLAYER BAR (Visible Across All Tabs)
+          PINNED MINI PLAYER BAR (Sleek, Compact & Non-Obtrusive)
          ========================================================================= */}
-      <div className="fixed bottom-14 left-0 right-0 max-w-md mx-auto px-3 py-2 z-30">
-        <div className="p-3 bg-slate-900/95 backdrop-blur-2xl border border-slate-800 rounded-2xl shadow-2xl flex flex-col gap-2.5">
-          {/* Row 1: Song Info & Play / Pause / Skip */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 overflow-hidden flex-1">
-              <div className="p-2 bg-gradient-to-tr from-rose-500 to-purple-600 rounded-xl text-white shrink-0">
-                <Music className="w-4 h-4" />
+      <div className="fixed bottom-14 left-0 right-0 max-w-md mx-auto px-3 py-1.5 z-30 pointer-events-auto">
+        <div className="p-2.5 sm:p-3 bg-zinc-900/98 backdrop-blur-2xl border border-white/[0.1] rounded-2xl shadow-2xl flex flex-col gap-2">
+          {/* Row 1: Song Info & Controls */}
+          <div className="flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2 overflow-hidden flex-1">
+              <div className="p-1.5 bg-white/[0.08] border border-white/[0.08] rounded-xl text-zinc-200 shrink-0">
+                <Music className="w-3.5 h-3.5" />
               </div>
               <div className="overflow-hidden">
-                <div className="text-xs font-extrabold text-white truncate">
+                <div className="text-xs font-semibold text-white truncate">
                   {currentSong ? currentSong.title : "TV đang ở chế độ chờ"}
                 </div>
-                <div className="text-[10px] text-slate-400 truncate">
-                  {currentSong ? `${currentSong.artist}` : "Hãy chọn bài để bắt đầu"}
+                <div className="text-[10px] sm:text-[11px] text-zinc-400 truncate">
+                  {currentSong ? `${currentSong.artist}` : "Chọn bài bên dưới để bắt đầu"}
                 </div>
               </div>
             </div>
 
             {/* Quick Remote Controls */}
             <div className="flex items-center gap-1.5 shrink-0">
-              {/* CAST TO TV BUTTON (beside Play/Pause) */}
+              {/* CAST TO TV BUTTON */}
               <CastButton
                 variant="player"
                 status={castStatus}
@@ -1913,171 +1935,192 @@ function ControllerContent({ params }: ControllerPageProps) {
                 onClick={() => setShowCastModal(true)}
               />
 
-              {/* POCKET VIDEO MIRROR BUTTON (Giải pháp 1.2: Xem TV trực tiếp trên điện thoại) */}
-              <button
-                onClick={() => setShowVideoMirror(true)}
-                disabled={!currentSong}
-                className="relative p-2 bg-gradient-to-r from-purple-600/30 to-pink-600/30 hover:from-purple-600/45 hover:to-pink-600/45 border border-purple-500/50 text-purple-200 disabled:opacity-40 rounded-xl transition-all cursor-pointer flex items-center justify-center active:scale-95 shadow-sm shadow-purple-950/40"
-                title="Màn hình phụ bỏ túi: Xem trực tiếp video TV trên điện thoại (đã tắt tiếng)"
-              >
-                <Tv className="w-4 h-4 text-purple-300" />
-                {currentSong && isPlaying && (
-                  <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                )}
-              </button>
-
-              {/* LYRICS BUTTON (Mục 2: Xem lời bài hát chạy trên điện thoại) */}
-              <button
-                onClick={handleOpenLyrics}
-                disabled={!currentSong}
-                className="p-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 disabled:opacity-40 rounded-xl transition-all cursor-pointer flex items-center justify-center active:scale-95"
-                title="Xem lời bài hát chạy trên điện thoại"
-              >
-                <FileText className="w-4 h-4 text-purple-400" />
-              </button>
-
-              {controllerRole === "admin" ? (
+              {currentSong && (
                 <>
+                  {/* POCKET VIDEO MIRROR BUTTON */}
                   <button
-                    onClick={() => sendControl(isPlaying ? "pause" : "play")}
-                    disabled={!currentSong}
-                    className="p-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white rounded-xl transition-all cursor-pointer"
-                    title={isPlaying ? "Tạm dừng" : "Tiếp tục phát"}
+                    onClick={() => setShowVideoMirror(true)}
+                    className="relative p-2 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-300 rounded-xl transition-all cursor-pointer flex items-center justify-center active:scale-95"
+                    title="Màn hình phụ bỏ túi: Xem trực tiếp video TV trên điện thoại"
                   >
-                    {isPlaying ? <Pause className="w-4 h-4 text-amber-400" /> : <Play className="w-4 h-4 text-emerald-400" />}
+                    <Tv className="w-3.5 h-3.5 text-zinc-300" />
+                    {isPlaying && (
+                      <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </span>
+                    )}
                   </button>
 
+                  {/* LYRICS BUTTON */}
                   <button
-                    onClick={() => sendControl("skip")}
-                    disabled={!currentSong}
-                    className="p-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 hover:text-white rounded-xl transition-all cursor-pointer"
-                    title="Bỏ qua bài này"
+                    onClick={handleOpenLyrics}
+                    className="p-2 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-300 rounded-xl transition-all cursor-pointer flex items-center justify-center active:scale-95"
+                    title="Xem lời bài hát chạy trên điện thoại"
                   >
-                    <SkipForward className="w-4 h-4" />
+                    <FileText className="w-3.5 h-3.5 text-zinc-300" />
                   </button>
-                </>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  {/* Allow song owner to skip their own song if currently playing */}
-                  {currentSong && currentSong.userId && currentSong.userId === userId && (
-                    <button
-                      onClick={() => sendControl("skip")}
-                      className="px-2.5 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[11px] font-bold active:scale-95"
-                      title="Bỏ qua bài hát do bạn chọn"
-                    >
-                      <SkipForward className="w-3.5 h-3.5 text-rose-400" />
-                      <span>Bỏ qua bài của bạn</span>
-                    </button>
+
+                  {controllerRole === "admin" ? (
+                    <>
+                      <button
+                        onClick={() => sendControl(isPlaying ? "pause" : "play")}
+                        className="p-2 bg-white hover:bg-zinc-200 text-zinc-950 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
+                        title={isPlaying ? "Tạm dừng" : "Tiếp tục phát"}
+                      >
+                        {isPlaying ? <Pause className="w-3.5 h-3.5 fill-zinc-950" /> : <Play className="w-3.5 h-3.5 fill-zinc-950" />}
+                      </button>
+
+                      <button
+                        onClick={() => sendControl("skip")}
+                        className="p-2 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-300 hover:text-white rounded-xl transition-all cursor-pointer active:scale-95"
+                        title="Bỏ qua bài này (không chấm điểm)"
+                      >
+                        <SkipForward className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      {currentSong.userId && currentSong.userId === userId && (
+                        <button
+                          onClick={() => sendControl("skip")}
+                          className="px-2 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[11px] font-medium active:scale-95"
+                          title="Bỏ qua bài hát do bạn chọn"
+                        >
+                          <SkipForward className="w-3 h-3 text-rose-400" />
+                          <span>Bỏ qua</span>
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => {
+                          showToast("🔒 Nhập mã PIN 4 chữ số từ TV để mở khóa quyền Chủ phòng!");
+                          setShowPinModal(true);
+                        }}
+                        className="px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-white/[0.08] text-zinc-300 hover:text-white rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[11px]"
+                        title="Chỉ chủ phòng mới có quyền điều khiển"
+                      >
+                        <Lock className="w-3 h-3 text-amber-400" />
+                        <span className="text-[10px] font-medium">Chủ phòng</span>
+                      </button>
+                    </div>
                   )}
 
+                  {/* Expand / Collapse Toggle for Tone & Seekbar */}
                   <button
-                    onClick={() => {
-                      showToast("🔒 Nhập mã PIN 4 chữ số từ TV để mở khóa quyền Chủ phòng!");
-                      setShowPinModal(true);
-                    }}
-                    className="px-2.5 py-1.5 bg-slate-800/80 hover:bg-slate-700 border border-amber-500/30 text-amber-300/80 hover:text-amber-300 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[11px]"
-                    title="Chỉ chủ phòng mới có quyền điều khiển"
+                    onClick={() => setIsPlayerExpanded((prev) => !prev)}
+                    className={`p-2 rounded-xl border transition-all cursor-pointer active:scale-95 ${
+                      isPlayerExpanded
+                        ? "bg-amber-400/15 border-amber-400/40 text-amber-300"
+                        : "bg-white/[0.06] hover:bg-white/[0.1] border-white/[0.08] text-zinc-400 hover:text-zinc-200"
+                    }`}
+                    title={isPlayerExpanded ? "Thu gọn thanh điều khiển" : "Mở rộng chỉnh Tone & Tua bài"}
                   >
-                    <Lock className="w-3.5 h-3.5 text-amber-400" />
-                    <span className="text-[10px] font-semibold">Chủ phòng</span>
+                    {isPlayerExpanded ? (
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    ) : (
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    )}
                   </button>
-                </div>
+                </>
               )}
             </div>
           </div>
 
-          {/* Row 2: Thanh tua kéo thả từ xa (Remote Scrubbing SeekBar) */}
-          <div className="pt-1 px-0.5">
-            {controllerRole === "admin" ? (
-              <KaraokeSeekBar roomId={roomId} disabled={!currentSong} />
-            ) : (
-              <div
-                onClick={() => {
-                  showToast("🔒 Chỉ chủ phòng mới có quyền tua video!");
-                  setShowPinModal(true);
-                }}
-                className="cursor-pointer"
-                title="Chỉ chủ phòng mới có quyền tua video"
-              >
-                <KaraokeSeekBar roomId={roomId} disabled={true} />
+          {/* Row 2 & Row 3: Only shown when song is active AND expanded */}
+          {currentSong && isPlayerExpanded && (
+            <div className="flex flex-col gap-2 pt-1 border-t border-white/[0.06] animate-in fade-in duration-150">
+              {/* Row 2: Thanh tua kéo thả từ xa (Remote Scrubbing SeekBar) */}
+              <div className="pt-0.5 px-0.5">
+                {controllerRole === "admin" ? (
+                  <KaraokeSeekBar roomId={roomId} disabled={!currentSong} />
+                ) : (
+                  <div
+                    onClick={() => {
+                      showToast("🔒 Chỉ chủ phòng mới có quyền tua video!");
+                      setShowPinModal(true);
+                    }}
+                    className="cursor-pointer"
+                    title="Chỉ chủ phòng mới có quyền tua video"
+                  >
+                    <KaraokeSeekBar roomId={roomId} disabled={true} />
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          {/* Row 3: Quick Audio DSP Controls (Tone [-] [Gốc] [+] & Ca sĩ/Beat) */}
-          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2 text-[11px]">
-            {/* Tone Semitone Controls */}
-            <div
-              className={`flex items-center gap-1 bg-slate-950/80 border border-slate-800/80 rounded-xl p-1 ${
-                controllerRole !== "admin" ? "opacity-60" : ""
-              }`}
-            >
-              <span className="text-[10px] text-slate-400 font-semibold px-1">Tone:</span>
-              <button
-                type="button"
-                onClick={() => handleToneChange("down")}
-                disabled={pitchShift <= -4}
-                className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-30 rounded-lg text-slate-200 font-bold cursor-pointer active:scale-95"
-                title={controllerRole === "admin" ? "Giảm 1 nửa cung (Tone [-])" : "Chỉ chủ phòng mới có quyền"}
-              >
-                Tone [-]
-              </button>
+              {/* Row 3: Quick Audio DSP Controls (Tone [-] [Gốc] [+] & Ca sĩ/Beat) */}
+              <div className="pt-1 flex items-center justify-between gap-2 text-[11px]">
+                {/* Tone Semitone Controls */}
+                <div
+                  className={`flex items-center gap-1 bg-zinc-950 border border-white/[0.08] rounded-xl p-1 ${
+                    controllerRole !== "admin" ? "opacity-60" : ""
+                  }`}
+                >
+                  <span className="text-[10px] text-zinc-500 font-medium px-1">Tone:</span>
+                  <button
+                    type="button"
+                    onClick={() => handleToneChange("down")}
+                    disabled={pitchShift <= -4}
+                    className="px-2 py-0.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 rounded-lg text-zinc-200 font-medium cursor-pointer active:scale-95 text-[10px]"
+                    title={controllerRole === "admin" ? "Giảm 1 nửa cung (Tone [-])" : "Chỉ chủ phòng mới có quyền"}
+                  >
+                    Tone [-]
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => handleToneChange("reset")}
-                className={`px-2 py-0.5 rounded-lg font-mono font-bold cursor-pointer active:scale-95 ${
-                  pitchShift === 0
-                    ? "bg-slate-800 text-slate-300"
-                    : "bg-purple-900/80 text-purple-200 border border-purple-500/50"
-                }`}
-                title={controllerRole === "admin" ? "Về Tone Gốc" : "Chỉ chủ phòng mới có quyền"}
-              >
-                {pitchShift === 0 ? "Tone [Gốc]" : pitchShift > 0 ? `[+${pitchShift}]` : `[${pitchShift}]`}
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToneChange("reset")}
+                    className={`px-2 py-0.5 rounded-lg font-mono text-[10px] font-medium cursor-pointer active:scale-95 ${
+                      pitchShift === 0
+                        ? "bg-zinc-800 text-zinc-300"
+                        : "bg-amber-950/60 text-amber-300 border border-amber-500/30"
+                    }`}
+                    title={controllerRole === "admin" ? "Về Tone Gốc" : "Chỉ chủ phòng mới có quyền"}
+                  >
+                    {pitchShift === 0 ? "Tone [Gốc]" : pitchShift > 0 ? `[+${pitchShift}]` : `[${pitchShift}]`}
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => handleToneChange("up")}
-                disabled={pitchShift >= 4}
-                className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-30 rounded-lg text-slate-200 font-bold cursor-pointer active:scale-95"
-                title={controllerRole === "admin" ? "Tăng 1 nửa cung (Tone [+])" : "Chỉ chủ phòng mới có quyền"}
-              >
-                Tone [+]
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToneChange("up")}
+                    disabled={pitchShift >= 4}
+                    className="px-2 py-0.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 rounded-lg text-zinc-200 font-medium cursor-pointer active:scale-95 text-[10px]"
+                    title={controllerRole === "admin" ? "Tăng 1 nửa cung (Tone [+])" : "Chỉ chủ phòng mới có quyền"}
+                  >
+                    Tone [+]
+                  </button>
+                </div>
+
+                {/* Vocal Splitter Toggle Button */}
+                <button
+                  type="button"
+                  onClick={handleToggleVocal}
+                  className={`px-2.5 py-1 rounded-xl text-[10px] font-medium flex items-center gap-1.5 border transition-all cursor-pointer active:scale-95 ${
+                    controllerRole !== "admin" ? "opacity-60" : ""
+                  } ${
+                    vocalMuted
+                      ? "bg-amber-950/40 border-amber-500/40 text-amber-300"
+                      : "bg-emerald-950/40 border-emerald-500/40 text-emerald-300"
+                  }`}
+                  title={controllerRole === "admin" ? "Chuyển đổi Ca sĩ / Beat" : "Chỉ chủ phòng mới có quyền"}
+                >
+                  <span>{vocalMuted ? "🎧" : "🎤"}</span>
+                  <span className="whitespace-nowrap">{vocalMuted ? "Beat" : "Ca sĩ"}</span>
+                </button>
+              </div>
             </div>
-
-            {/* Vocal Splitter Toggle Button */}
-            <button
-              type="button"
-              onClick={handleToggleVocal}
-              className={`px-2.5 py-1 rounded-xl font-bold flex items-center gap-1.5 border transition-all cursor-pointer active:scale-95 ${
-                controllerRole !== "admin" ? "opacity-60" : ""
-              } ${
-                vocalMuted
-                  ? "bg-amber-950/80 border-amber-500/60 text-amber-300 shadow-sm"
-                  : "bg-emerald-950/80 border-emerald-500/60 text-emerald-300"
-              }`}
-              title={controllerRole === "admin" ? "Chuyển đổi Ca sĩ / Beat" : "Chỉ chủ phòng mới có quyền"}
-            >
-              <span>{vocalMuted ? "🎧" : "🎤"}</span>
-              <span className="whitespace-nowrap">{vocalMuted ? "Beat" : "Ca sĩ"}</span>
-            </button>
-          </div>
+          )}
         </div>
       </div>
 
       {/* =========================================================================
           MOBILE BOTTOM NAVIGATION BAR (4 Tabs: Tìm bài, Bài tủ, Hàng đợi, Tương tác)
          ========================================================================= */}
-      <footer className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-slate-950/95 backdrop-blur-2xl border-t border-slate-900 p-2 flex items-center justify-around text-xs text-slate-400 z-40">
+      <footer className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-zinc-950/95 backdrop-blur-2xl border-t border-white/[0.08] p-2 flex items-center justify-around text-xs text-zinc-400 z-40">
         <button
           onClick={() => setActiveTab("search")}
           className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-colors cursor-pointer ${
-            activeTab === "search" ? "text-rose-400 font-bold" : "hover:text-slate-200"
+            activeTab === "search" ? "text-white font-medium" : "text-zinc-500 hover:text-zinc-300"
           }`}
         >
           <Search className="w-4 h-4" />
@@ -2087,13 +2130,13 @@ function ControllerContent({ params }: ControllerPageProps) {
         <button
           onClick={() => setActiveTab("favorites")}
           className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-colors cursor-pointer relative ${
-            activeTab === "favorites" ? "text-rose-400 font-bold" : "hover:text-slate-200"
+            activeTab === "favorites" ? "text-white font-medium" : "text-zinc-500 hover:text-zinc-300"
           }`}
         >
-          <Heart className={`w-4 h-4 ${activeTab === "favorites" ? "fill-rose-400" : ""}`} />
+          <Heart className={`w-4 h-4 ${activeTab === "favorites" ? "fill-rose-500 text-rose-500" : ""}`} />
           <span className="text-[10px]">Bài tủ</span>
           {favorites.length > 0 && (
-            <span className="absolute top-0 right-1.5 w-3.5 h-3.5 bg-rose-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
+            <span className="absolute top-0 right-1.5 w-3.5 h-3.5 bg-zinc-100 text-zinc-950 text-[8px] font-mono font-bold rounded-full flex items-center justify-center">
               {favorites.length}
             </span>
           )}
@@ -2102,13 +2145,13 @@ function ControllerContent({ params }: ControllerPageProps) {
         <button
           onClick={() => setActiveTab("queue")}
           className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-colors cursor-pointer relative ${
-            activeTab === "queue" ? "text-purple-400 font-bold" : "hover:text-slate-200"
+            activeTab === "queue" ? "text-white font-medium" : "text-zinc-500 hover:text-zinc-300"
           }`}
         >
           <ListMusic className="w-4 h-4" />
           <span className="text-[10px]">Hàng đợi</span>
           {queue.length > 0 && (
-            <span className="absolute top-0 right-1.5 w-3.5 h-3.5 bg-purple-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
+            <span className="absolute top-0 right-1.5 w-3.5 h-3.5 bg-zinc-100 text-zinc-950 text-[8px] font-mono font-bold rounded-full flex items-center justify-center">
               {queue.length}
             </span>
           )}
@@ -2117,7 +2160,7 @@ function ControllerContent({ params }: ControllerPageProps) {
         <button
           onClick={() => setActiveTab("soundboard")}
           className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-colors cursor-pointer ${
-            activeTab === "soundboard" ? "text-rose-400 font-bold" : "hover:text-slate-200"
+            activeTab === "soundboard" ? "text-white font-medium" : "text-zinc-500 hover:text-zinc-300"
           }`}
         >
           <PartyPopper className="w-4 h-4" />
@@ -2139,28 +2182,28 @@ function ControllerContent({ params }: ControllerPageProps) {
           MODAL: NHẬP MÃ PIN QUẢN TRỊ (Claim Admin Modal)
          ========================================================================= */}
       {showPinModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-xs bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-1 border-b border-slate-800">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-xs bg-zinc-900 border border-white/[0.1] rounded-3xl p-5 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-1 border-b border-white/[0.08]">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-amber-500/20 text-amber-400 rounded-xl">
+                <div className="p-1.5 bg-amber-400/10 text-amber-300 rounded-xl border border-amber-400/20">
                   <ShieldCheck className="w-4 h-4" />
                 </div>
-                <h3 className="text-sm font-bold text-white">Xác Thực Chủ Phòng</h3>
+                <h3 className="text-sm font-semibold text-white">Xác thực chủ phòng</h3>
               </div>
               <button
                 onClick={() => {
                   setShowPinModal(false);
                   setPinInput("");
                 }}
-                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                className="p-1 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Nhập mã PIN 4 chữ số hiển thị trên góc màn hình TV để mở khóa toàn bộ quyền điều khiển phòng:
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Nhập mã PIN 4 chữ số hiển thị trên góc màn hình TV để mở khóa quyền điều khiển:
             </p>
 
             <form onSubmit={handleClaimAdmin} className="space-y-4">
@@ -2174,7 +2217,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                   value={pinInput}
                   onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ""))}
                   placeholder="••••"
-                  className="w-40 text-center tracking-[0.5em] text-2xl font-mono font-black py-2.5 bg-slate-950 border-2 border-slate-700 focus:border-amber-400 rounded-2xl text-amber-300 outline-none transition-all shadow-inner"
+                  className="w-40 text-center tracking-[0.5em] text-2xl font-mono font-bold py-2.5 bg-zinc-950 border border-white/[0.12] focus:border-white/40 rounded-2xl text-white outline-none transition-colors"
                 />
               </div>
 
@@ -2185,16 +2228,16 @@ function ControllerContent({ params }: ControllerPageProps) {
                     setShowPinModal(false);
                     setPinInput("");
                   }}
-                  className="flex-1 py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                  className="flex-1 py-2 px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium rounded-xl transition-colors cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={pinInput.length < 4}
-                  className="flex-1 py-2 px-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 disabled:opacity-40 text-slate-950 text-xs font-bold rounded-xl transition-all shadow-lg shadow-amber-900/30 cursor-pointer"
+                  className="flex-1 py-2 px-3 bg-white hover:bg-zinc-200 disabled:opacity-40 text-zinc-950 text-xs font-semibold rounded-xl transition-all shadow-sm cursor-pointer active:scale-95"
                 >
-                  Xác Nhận
+                  Xác nhận
                 </button>
               </div>
             </form>
@@ -2206,24 +2249,24 @@ function ControllerContent({ params }: ControllerPageProps) {
           MODAL: ĐỔI BIỆT DANH (Edit Nickname Modal)
          ========================================================================= */}
       {isEditingName && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-xs bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-1 border-b border-slate-800">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-xs bg-zinc-900 border border-white/[0.1] rounded-3xl p-5 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-1 border-b border-white/[0.08]">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-rose-500/20 text-rose-400 rounded-xl">
+                <div className="p-1.5 bg-white/[0.08] text-zinc-200 rounded-xl border border-white/[0.08]">
                   <User className="w-4 h-4" />
                 </div>
-                <h3 className="text-sm font-bold text-white">Đổi Biệt Danh</h3>
+                <h3 className="text-sm font-semibold text-white">Đổi biệt danh</h3>
               </div>
               <button
                 onClick={() => setIsEditingName(false)}
-                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                className="p-1 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <p className="text-xs text-zinc-400 leading-relaxed">
               Tên này sẽ hiển thị trên màn hình TV và danh sách chờ khi bạn chọn bài:
             </p>
 
@@ -2236,7 +2279,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
                   placeholder="Nhập tên của bạn..."
-                  className="w-full text-center text-sm font-bold py-2.5 px-3 bg-slate-950 border border-slate-700 focus:border-rose-500 rounded-2xl text-white outline-none transition-all"
+                  className="w-full text-center text-sm font-medium py-2.5 px-3 bg-zinc-950 border border-white/[0.1] focus:border-white/40 rounded-xl text-white outline-none transition-colors"
                 />
               </div>
 
@@ -2244,16 +2287,16 @@ function ControllerContent({ params }: ControllerPageProps) {
                 <button
                   type="button"
                   onClick={() => setIsEditingName(false)}
-                  className="flex-1 py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                  className="flex-1 py-2 px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium rounded-xl transition-colors cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={!nameInput.trim()}
-                  className="flex-1 py-2 px-3 bg-gradient-to-r from-rose-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 disabled:opacity-40 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-rose-900/30 cursor-pointer"
+                  className="flex-1 py-2 px-3 bg-white hover:bg-zinc-200 disabled:opacity-40 text-zinc-950 text-xs font-semibold rounded-xl transition-all shadow-sm cursor-pointer active:scale-95"
                 >
-                  Lưu Tên
+                  Lưu tên
                 </button>
               </div>
             </form>
@@ -2265,18 +2308,18 @@ function ControllerContent({ params }: ControllerPageProps) {
           MODAL: CÀI ĐẶT PHÒNG & XẾP HÀNG CÔNG BẰNG (Mục 3: Room Settings Modal)
          ========================================================================= */}
       {showSettingsModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-zinc-900 border border-white/[0.1] rounded-3xl p-5 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-purple-500/20 text-purple-400 rounded-xl">
+                <div className="p-1.5 bg-white/[0.08] text-zinc-200 rounded-xl border border-white/[0.08]">
                   <Settings className="w-4 h-4" />
                 </div>
-                <h3 className="text-sm font-bold text-white">Cài Đặt Phòng Karaoke</h3>
+                <h3 className="text-sm font-semibold text-white">Cài đặt phòng hát</h3>
               </div>
               <button
                 onClick={() => setShowSettingsModal(false)}
-                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                className="p-1 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2284,30 +2327,29 @@ function ControllerContent({ params }: ControllerPageProps) {
 
             <form onSubmit={handleSaveSettings} className="space-y-4">
               {/* Option 1: Chế độ Xếp hàng công bằng (Fair Play) */}
-              <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
+              <div className="p-3 bg-zinc-950 border border-white/[0.08] rounded-2xl space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">⚖️</span>
+                    <span className="text-base">⚖️</span>
                     <div>
-                      <div className="text-xs font-bold text-white">Xếp hàng công bằng (Fair Play)</div>
-                      <div className="text-[10px] text-slate-400">Giới hạn số bài chờ mỗi người</div>
+                      <div className="text-xs font-semibold text-white">Xếp hàng công bằng (Fair Play)</div>
+                      <div className="text-[10px] text-zinc-400">Giới hạn số bài chờ mỗi người</div>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setTempFairPlay(!tempFairPlay)}
                     className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 ease-in-out ${
-                      tempFairPlay ? "bg-purple-600 justify-end" : "bg-slate-800 justify-start"
+                      tempFairPlay ? "bg-white justify-end" : "bg-zinc-800 justify-start"
                     }`}
                   >
-                    <div className="w-4 h-4 bg-white rounded-full shadow-md transform" />
+                    <div className={`w-4 h-4 rounded-full shadow-md transform ${tempFairPlay ? "bg-zinc-950" : "bg-zinc-400"}`} />
                   </button>
                 </div>
 
-                <p className="text-[10px] text-slate-400 leading-relaxed border-t border-slate-800/80 pt-1.5">
-                  💡 <b className="text-slate-300">Lưu ý:</b> Khi bật, mỗi người chỉ được giữ tối đa{" "}
-                  <b className="text-purple-400">{tempMaxQueue} bài</b> trong hàng đợi. Hệ thống sẽ{" "}
-                  <b className="text-amber-400">tự động tắt</b> nếu phòng chỉ có 1 hoặc 2 người để tránh gây phiền toái.
+                <p className="text-[10px] text-zinc-400 leading-relaxed border-t border-white/[0.06] pt-1.5">
+                  Khi bật, mỗi người chỉ được giữ tối đa{" "}
+                  <b className="text-zinc-200">{tempMaxQueue} bài</b> trong hàng đợi. Hệ thống sẽ tự động tắt nếu phòng chỉ có 1 hoặc 2 người.
                 </p>
               </div>
 
@@ -2315,8 +2357,8 @@ function ControllerContent({ params }: ControllerPageProps) {
               {tempFairPlay && (
                 <div className="space-y-1.5 px-1 animate-in fade-in duration-150">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-300 font-medium">Số bài tối đa mỗi người:</span>
-                    <span className="font-mono font-bold text-purple-400 px-2 py-0.5 rounded bg-purple-950 border border-purple-500/50">
+                    <span className="text-zinc-400 font-medium">Số bài tối đa mỗi người:</span>
+                    <span className="font-mono font-medium text-white px-2 py-0.5 rounded bg-zinc-800 border border-white/[0.08]">
                       {tempMaxQueue} bài
                     </span>
                   </div>
@@ -2326,10 +2368,10 @@ function ControllerContent({ params }: ControllerPageProps) {
                         key={num}
                         type="button"
                         onClick={() => setTempMaxQueue(num)}
-                        className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                        className={`flex-1 py-1.5 rounded-xl text-xs font-medium transition-all border ${
                           tempMaxQueue === num
-                            ? "bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-950/40"
-                            : "bg-slate-950 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white"
+                            ? "bg-white text-zinc-950 border-white shadow-sm"
+                            : "bg-zinc-950 text-zinc-400 border-white/[0.08] hover:bg-zinc-800 hover:text-white"
                         }`}
                       >
                         {num}
@@ -2340,31 +2382,31 @@ function ControllerContent({ params }: ControllerPageProps) {
               )}
 
               {/* Buttons */}
-              <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+              <div className="flex items-center gap-2 pt-2 border-t border-white/[0.08]">
                 <button
                   type="button"
                   onClick={() => setShowSettingsModal(false)}
-                  className="flex-1 py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                  className="flex-1 py-2 px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium rounded-xl transition-colors cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 px-3 bg-gradient-to-r from-purple-600 to-rose-600 hover:from-purple-500 hover:to-rose-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-purple-900/30 cursor-pointer"
+                  className="flex-1 py-2 px-3 bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold rounded-xl transition-all shadow-sm cursor-pointer active:scale-95"
                 >
-                  Lưu Cài Đặt
+                  Lưu cài đặt
                 </button>
               </div>
 
               {/* Danger Zone: Đóng phòng hát (Admin Only) */}
-              <div className="pt-2 border-t border-slate-800/80">
+              <div className="pt-2 border-t border-white/[0.06]">
                 <button
                   type="button"
                   onClick={handleCloseRoomFromController}
-                  className="w-full py-2 px-3 bg-rose-950/30 hover:bg-rose-900/50 border border-rose-500/30 text-rose-300 hover:text-rose-200 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                  className="w-full py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 text-xs font-medium rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
                 >
                   <LogOut className="w-3.5 h-3.5 text-rose-400" />
-                  <span>Đóng phòng & Kết thúc tiệc</span>
+                  <span>Đóng phòng & Kết thúc</span>
                 </button>
               </div>
             </form>
@@ -2377,18 +2419,18 @@ function ControllerContent({ params }: ControllerPageProps) {
          ========================================================================= */}
       {showLyricsModal && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col p-4 max-w-md mx-auto animate-in fade-in zoom-in-95 duration-200">
-          <div className="w-full flex-1 bg-slate-950 border border-slate-800 rounded-3xl p-4 shadow-2xl flex flex-col overflow-hidden">
+          <div className="w-full flex-1 bg-zinc-950 border border-white/[0.1] rounded-3xl p-4 shadow-2xl flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800/80 shrink-0">
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.08] shrink-0">
               <div className="flex items-center gap-2.5 overflow-hidden">
-                <div className="p-2 bg-gradient-to-tr from-purple-600 to-rose-600 text-white rounded-xl shrink-0">
+                <div className="p-2 bg-white/[0.08] border border-white/[0.08] text-zinc-200 rounded-xl shrink-0">
                   <Mic2 className="w-4 h-4" />
                 </div>
                 <div className="overflow-hidden">
-                  <h3 className="text-xs font-bold text-white truncate">
+                  <h3 className="text-xs font-semibold text-white truncate">
                     {lyricsData?.title || currentSong?.title || "Lời bài hát"}
                   </h3>
-                  <p className="text-[10px] text-slate-400 truncate">
+                  <p className="text-[10px] text-zinc-400 truncate">
                     {lyricsData?.artist || currentSong?.artist || "Đang phát trên TV"}
                   </p>
                 </div>
@@ -2401,31 +2443,31 @@ function ControllerContent({ params }: ControllerPageProps) {
                     setShowLyricsModal(false);
                     setShowVideoMirror(true);
                   }}
-                  className="px-2 py-1 bg-purple-950/80 border border-purple-700/60 rounded-lg text-purple-300 text-[10px] font-bold hover:bg-purple-900 active:scale-95 flex items-center gap-1"
+                  className="px-2.5 py-1 bg-zinc-900 border border-white/[0.1] rounded-lg text-zinc-200 text-[10px] font-medium hover:bg-zinc-800 active:scale-95 flex items-center gap-1"
                   title="Chuyển sang xem video trực tiếp trên điện thoại"
                 >
-                  <Tv className="w-3 h-3 text-purple-400" />
+                  <Tv className="w-3 h-3 text-zinc-300" />
                   <span>Xem Video</span>
                 </button>
 
                 {/* Font Size Adjusters */}
                 <button
                   onClick={() => setLyricsFontSize((prev) => Math.max(13, prev - 2))}
-                  className="px-2 py-1 bg-slate-900 border border-slate-800 rounded-lg text-slate-300 text-[10px] font-bold hover:bg-slate-800 active:scale-95"
+                  className="px-2 py-1 bg-zinc-900 border border-white/[0.08] rounded-lg text-zinc-300 text-[10px] font-medium hover:bg-zinc-800 active:scale-95"
                   title="Thu nhỏ chữ"
                 >
                   A-
                 </button>
                 <button
                   onClick={() => setLyricsFontSize((prev) => Math.min(24, prev + 2))}
-                  className="px-2 py-1 bg-slate-900 border border-slate-800 rounded-lg text-slate-300 text-[10px] font-bold hover:bg-slate-800 active:scale-95"
+                  className="px-2 py-1 bg-zinc-900 border border-white/[0.08] rounded-lg text-zinc-300 text-[10px] font-medium hover:bg-zinc-800 active:scale-95"
                   title="Phóng to chữ"
                 >
                   A+
                 </button>
                 <button
                   onClick={() => setShowLyricsModal(false)}
-                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors ml-1"
+                  className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors ml-1"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -2438,8 +2480,8 @@ function ControllerContent({ params }: ControllerPageProps) {
               className="flex-1 overflow-y-auto py-6 px-2 space-y-4 text-center scroll-smooth scrollbar-none"
             >
               {isLoadingLyrics ? (
-                <div className="py-24 flex flex-col items-center justify-center gap-3 text-slate-400 text-xs">
-                  <Loader2 className="w-7 h-7 text-purple-500 animate-spin" />
+                <div className="py-24 flex flex-col items-center justify-center gap-3 text-zinc-500 text-xs">
+                  <Loader2 className="w-6 h-6 text-zinc-300 animate-spin" />
                   <span>Đang tải lời bài hát đồng bộ...</span>
                 </div>
               ) : lyricsData && lyricsData.lines.length > 0 ? (
@@ -2451,10 +2493,10 @@ function ControllerContent({ params }: ControllerPageProps) {
                       id={`lyric-line-${idx}`}
                       className={`transition-all duration-300 rounded-xl px-3 py-1.5 ${
                         isActive
-                          ? "font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-300 to-rose-400 scale-105 drop-shadow-[0_0_12px_rgba(250,204,21,0.6)] bg-white/5 border border-yellow-400/20"
+                          ? "font-bold text-white bg-white/[0.08] border border-white/[0.15] scale-102"
                           : idx < activeLyricIndex
-                          ? "text-slate-500 font-medium opacity-60"
-                          : "text-slate-300 font-semibold opacity-90"
+                          ? "text-zinc-600 font-normal"
+                          : "text-zinc-400 font-medium"
                       }`}
                       style={{ fontSize: `${isActive ? lyricsFontSize + 2 : lyricsFontSize}px` }}
                     >
@@ -2463,15 +2505,15 @@ function ControllerContent({ params }: ControllerPageProps) {
                   );
                 })
               ) : (
-                <div className="py-24 text-slate-500 text-xs">
+                <div className="py-24 text-zinc-500 text-xs">
                   Chưa có dữ liệu lời cho bài hát này. Hãy cùng hát theo màn hình TV!
                 </div>
               )}
             </div>
 
             {/* Footer indicator */}
-            <div className="pt-2 border-t border-slate-800/80 text-[10px] text-slate-500 flex items-center justify-between shrink-0">
-              <span className="flex items-center gap-1">
+            <div className="pt-2 border-t border-white/[0.08] text-[10px] text-zinc-500 flex items-center justify-between shrink-0">
+              <span className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 Đồng bộ trực tiếp với TV
               </span>
@@ -2481,61 +2523,7 @@ function ControllerContent({ params }: ControllerPageProps) {
         </div>
       )}
 
-      {/* =========================================================================
-          MODAL: THÔNG BÁO ĐIỂM SỐ KARAOKE TRÊN ĐIỆN THOẠI (Mục 1: Score Popup)
-         ========================================================================= */}
-      {scoreCelebration && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200">
-          <div className="w-full max-w-xs bg-gradient-to-b from-slate-900 to-purple-950 border border-amber-500/50 rounded-3xl p-6 shadow-2xl text-center space-y-4 relative select-none">
-            {/* Ambient gold glow */}
-            <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-32 h-32 bg-amber-500/30 rounded-full blur-2xl pointer-events-none" />
 
-            {/* Trophy Icon */}
-            <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-tr from-amber-600 via-yellow-400 to-amber-200 p-1 shadow-lg shadow-amber-500/30 flex items-center justify-center animate-bounce">
-              <div className="w-full h-full rounded-full bg-slate-950 flex items-center justify-center">
-                <Trophy className="w-10 h-10 text-yellow-400" />
-              </div>
-            </div>
-
-            {/* Song title & singer */}
-            <div>
-              <div className="text-[11px] text-amber-300 font-bold uppercase tracking-wider">
-                KẾT QUẢ BÀI HÁT
-              </div>
-              <h3 className="text-base font-black text-white truncate mt-0.5">
-                {scoreCelebration.songTitle}
-              </h3>
-              <p className="text-xs text-purple-300 mt-0.5">
-                Trình bày: <b className="text-yellow-300">{scoreCelebration.singerName}</b>
-              </p>
-            </div>
-
-            {/* Score Big Display */}
-            <div className="flex items-baseline justify-center gap-1.5 py-1">
-              <span className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 to-amber-400 font-mono drop-shadow">
-                {scoreCelebration.score}
-              </span>
-              <span className="text-lg font-bold text-amber-300/80">/ 100</span>
-            </div>
-
-            {/* Award Title Badge */}
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 text-xs font-bold text-amber-200 shadow">
-              <Award className="w-4 h-4 text-amber-300" />
-              <span>{scoreCelebration.title}</span>
-            </div>
-
-            {/* Close Button */}
-            <div className="pt-2">
-              <button
-                onClick={() => setScoreCelebration(null)}
-                className="w-full py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs rounded-xl shadow-lg transition active:scale-95"
-              >
-                Tuyệt vời! Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* =========================================================================
           MODAL / THEATER: POCKET VIDEO MIRROR (Giải pháp 1.2: Màn hình phụ bỏ túi)
@@ -2557,29 +2545,29 @@ function ControllerContent({ params }: ControllerPageProps) {
           ROOM CLOSED SCREEN (Khi phòng không tồn tại hoặc TV Host đã đóng phòng)
          ========================================================================= */}
       {isRoomClosed && (
-        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-6 text-center select-none animate-in fade-in zoom-in-95 duration-200">
-          <div className="w-20 h-20 rounded-full bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-4 shadow-xl shadow-rose-950/40 animate-pulse">
-            <AlertCircle className="w-10 h-10" />
+        <div className="fixed inset-0 z-50 bg-[#09090b] flex flex-col items-center justify-center p-6 text-center select-none animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mb-4">
+            <AlertCircle className="w-8 h-8" />
           </div>
 
-          <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30 mb-2">
-            PHÒNG ĐÃ ĐÓNG
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider bg-rose-500/10 text-rose-300 border border-rose-500/20 mb-2">
+            Phòng đã đóng
           </span>
 
-          <h2 className="text-xl md:text-2xl font-black text-white mb-2">
-            Phòng Hát Đã Kết Thúc
+          <h2 className="text-xl font-semibold text-white mb-2">
+            Phòng hát đã kết thúc
           </h2>
 
-          <p className="text-xs md:text-sm text-slate-300 max-w-xs mb-6 leading-relaxed">
+          <p className="text-xs text-zinc-400 max-w-xs mb-6 leading-relaxed">
             {roomClosedReason || "TV Host đã đóng phòng hoặc mã phòng này không còn tồn tại trên máy chủ."}
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full max-w-xs">
+          <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full max-w-xs">
             <Link
               href="/"
-              className="w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-medium text-xs transition flex items-center justify-center gap-2 cursor-pointer border border-white/[0.06]"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="w-3.5 h-3.5" />
               <span>Về Trang Chủ</span>
             </Link>
 
@@ -2587,10 +2575,10 @@ function ControllerContent({ params }: ControllerPageProps) {
               onClick={() => {
                 setShowCastModal(true);
               }}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-rose-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg shadow-purple-900/30 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+              className="w-full py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs shadow-sm transition flex items-center justify-center gap-2 cursor-pointer active:scale-95"
             >
-              <Tv className="w-4 h-4" />
-              <span>Kết Nối TV Khác</span>
+              <Tv className="w-3.5 h-3.5" />
+              <span>Kết nối TV khác</span>
             </button>
           </div>
         </div>

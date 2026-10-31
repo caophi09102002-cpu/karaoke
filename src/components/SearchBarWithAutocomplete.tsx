@@ -7,7 +7,6 @@ import {
   ArrowUpRight,
   Music,
   Loader2,
-  Sparkles,
 } from "lucide-react";
 
 interface SearchBarWithAutocompleteProps {
@@ -24,7 +23,7 @@ export default function SearchBarWithAutocomplete({
   onChangeQuery,
   onSearch,
   isSearching = false,
-  placeholder = "Tìm tên bài hát hoặc viết tắt (VD: 'cdns', 'Nơi này có anh')...",
+  placeholder = "Tìm bài hát, ca sĩ hoặc gõ tắt (VD: cdns, nhnt)...",
   className = "",
 }: SearchBarWithAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -79,46 +78,44 @@ export default function SearchBarWithAutocomplete({
   // Submit search
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    const clean = query.trim();
+    if (!clean) return;
     setIsOpen(false);
-    inputRef.current?.blur();
-
-    if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
-      const chosen = suggestions[selectedIndex];
-      onChangeQuery(chosen);
-      onSearch(chosen);
-    } else if (query.trim()) {
-      onSearch(query.trim());
-    }
+    onSearch(clean);
   };
 
   // Select suggestion item
-  const handleSelectSuggestion = (suggestionText: string, e?: React.MouseEvent) => {
-    if (e) e.preventDefault();
-    onChangeQuery(suggestionText);
+  const handleSelectSuggestion = (selectedText: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    onChangeQuery(selectedText);
     setIsOpen(false);
-    inputRef.current?.blur();
-    onSearch(suggestionText);
+    onSearch(selectedText);
   };
 
-  // Quick fill without searching immediately (via Arrow button)
-  const handleQuickFill = (suggestionText: string, e: React.MouseEvent) => {
+  // Quick fill into input without triggering search immediately
+  const handleQuickFill = (text: string, e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
-    onChangeQuery(suggestionText);
-    inputRef.current?.focus();
-    fetchSuggestions(suggestionText);
+    onChangeQuery(text);
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
   };
 
-  // Clear query
+  // Clear input
   const handleClear = () => {
     onChangeQuery("");
     setSuggestions([]);
     setIsOpen(false);
-    setSelectedIndex(-1);
-    inputRef.current?.focus();
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
   };
 
-  // Keyboard navigation (ArrowDown, ArrowUp, Escape, Enter)
+  // Keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isOpen || suggestions.length === 0) return;
 
@@ -151,11 +148,9 @@ export default function SearchBarWithAutocomplete({
     };
   }, []);
 
-  // Helper: Highlight matching query text within suggestion string
   const renderHighlightedText = (text: string, highlight: string) => {
     if (!highlight.trim()) return <span>{text}</span>;
 
-    // Simple case-insensitive matching
     const cleanHighlight = highlight.trim();
     const parts = text.split(new RegExp(`(${cleanHighlight.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"));
 
@@ -163,11 +158,11 @@ export default function SearchBarWithAutocomplete({
       <span className="truncate">
         {parts.map((part, i) =>
           part.toLowerCase() === cleanHighlight.toLowerCase() ? (
-            <span key={i} className="font-extrabold text-rose-400">
+            <span key={i} className="font-semibold text-white">
               {part}
             </span>
           ) : (
-            <span key={i} className="text-slate-300 font-medium">
+            <span key={i} className="text-zinc-400 font-normal">
               {part}
             </span>
           )
@@ -181,11 +176,11 @@ export default function SearchBarWithAutocomplete({
       {/* Search Input Form */}
       <form onSubmit={handleSubmit} className="relative flex items-center">
         {/* Left Search Icon / Loading Spinner */}
-        <div className="absolute left-3.5 flex items-center pointer-events-none text-slate-400">
+        <div className="absolute left-3.5 flex items-center pointer-events-none text-zinc-400">
           {isLoadingSuggestions || isSearching ? (
-            <Loader2 className="w-4 h-4 text-rose-500 animate-spin" />
+            <Loader2 className="w-4 h-4 text-zinc-300 animate-spin" />
           ) : (
-            <Search className="w-4 h-4 text-slate-400 transition-colors" />
+            <Search className="w-4 h-4 text-zinc-400 stroke-[1.75]" />
           )}
         </div>
 
@@ -204,16 +199,16 @@ export default function SearchBarWithAutocomplete({
           placeholder={placeholder}
           autoComplete="off"
           spellCheck="false"
-          className="w-full bg-slate-900 border border-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 rounded-2xl pl-10 pr-24 py-3 text-sm text-white placeholder-slate-500 focus:outline-none shadow-lg transition-all"
+          className="w-full bg-zinc-900/90 border border-white/[0.08] focus:border-zinc-400 rounded-xl pl-10 pr-20 py-3 text-sm text-white placeholder-zinc-500 focus:outline-none transition-colors shadow-lg shadow-black/20"
         />
 
         {/* Right Buttons: Clear "X" and "Tìm" button */}
-        <div className="absolute right-2 flex items-center gap-1.5">
+        <div className="absolute right-1.5 flex items-center gap-1">
           {query.trim() && (
             <button
               type="button"
               onClick={handleClear}
-              className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
               title="Xóa ô tìm kiếm"
             >
               <X className="w-3.5 h-3.5" />
@@ -223,27 +218,17 @@ export default function SearchBarWithAutocomplete({
           <button
             type="submit"
             disabled={!query.trim() || isSearching}
-            className="px-3.5 py-1.5 bg-gradient-to-r from-rose-600 via-rose-500 to-purple-600 hover:from-rose-500 hover:to-purple-500 disabled:opacity-40 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-rose-950/40 cursor-pointer active:scale-95"
+            className="px-3 py-1.5 bg-white hover:bg-zinc-200 disabled:opacity-30 text-zinc-950 text-xs font-semibold rounded-lg transition-all cursor-pointer active:scale-95 shadow-sm"
           >
             {isSearching ? "Tìm..." : "Tìm"}
           </button>
         </div>
       </form>
 
-      {/* =========================================================================
-          DROPDOWN POPUP: GỢI Ý TỪ KHÓA (Autocomplete Suggestions)
-         ========================================================================= */}
+      {/* Autocomplete Suggestions Dropdown */}
       {isOpen && suggestions.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-slate-900/98 backdrop-blur-2xl border border-slate-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-          <div className="px-3 py-1.5 border-b border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-            <span className="flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-rose-400" />
-              Gợi ý bài hát & Beat
-            </span>
-            <span>{suggestions.length} gợi ý</span>
-          </div>
-
-          <ul className="max-h-64 overflow-y-auto divide-y divide-slate-800/50 py-1">
+        <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-zinc-900/95 backdrop-blur-xl border border-white/[0.1] rounded-xl shadow-2xl overflow-hidden animate-in fade-in duration-150">
+          <ul className="max-h-64 overflow-y-auto divide-y divide-white/[0.04] py-1">
             {suggestions.map((item, index) => {
               const isSelected = index === selectedIndex;
               const isKaraoke = item.toLowerCase().includes("karaoke") || item.toLowerCase().includes("beat");
@@ -254,37 +239,22 @@ export default function SearchBarWithAutocomplete({
                   onMouseEnter={() => setSelectedIndex(index)}
                   onMouseDown={(e) => handleSelectSuggestion(item, e)}
                   className={`group px-3.5 py-2.5 flex items-center justify-between gap-3 cursor-pointer transition-colors ${
-                    isSelected
-                      ? "bg-rose-500/15 text-rose-300"
-                      : "hover:bg-slate-850 text-slate-300"
+                    isSelected ? "bg-white/[0.08] text-white" : "hover:bg-white/[0.04] text-zinc-300"
                   }`}
                 >
-                  {/* Left: Icon & Highlighted Suggestion Text */}
                   <div className="flex items-center gap-2.5 overflow-hidden flex-1">
-                    <div
-                      className={`p-1.5 rounded-lg shrink-0 ${
-                        isKaraoke
-                          ? "bg-rose-500/10 text-rose-400"
-                          : "bg-slate-800 text-slate-400 group-hover:text-slate-300"
-                      }`}
-                    >
-                      {isKaraoke ? (
-                        <Music className="w-3.5 h-3.5" />
-                      ) : (
-                        <Search className="w-3.5 h-3.5" />
-                      )}
+                    <div className="p-1.5 rounded-md bg-white/[0.04] text-zinc-400 group-hover:text-zinc-200 shrink-0">
+                      <Music className="w-3.5 h-3.5 stroke-[1.75]" />
                     </div>
-
                     <div className="text-xs truncate flex-1">
                       {renderHighlightedText(item, query)}
                     </div>
                   </div>
 
-                  {/* Right: Quick Fill Arrow Button */}
                   <button
                     type="button"
                     onMouseDown={(e) => handleQuickFill(item, e)}
-                    className="p-1 text-slate-500 hover:text-white rounded-lg hover:bg-slate-800 transition-colors shrink-0 cursor-pointer"
+                    className="p-1 text-zinc-500 hover:text-white rounded-md hover:bg-white/[0.06] transition-colors shrink-0 cursor-pointer"
                     title="Điền vào ô tìm kiếm"
                   >
                     <ArrowUpRight className="w-3.5 h-3.5" />
