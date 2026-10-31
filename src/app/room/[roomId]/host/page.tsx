@@ -148,6 +148,18 @@ function HostRoomContent({ params }: HostPageProps) {
   const lastTimeUpdateSentRef = useRef<number>(0);
   const initialSeekTimeRef = useRef<number>(0);
 
+  // Guard against duplicate song end / scoring triggers
+  const isEndingSongRef = useRef<boolean>(false);
+  const activeSongIdRef = useRef<string | null>(null);
+
+  // Reset song end guard when new song is loaded
+  useEffect(() => {
+    if (currentSong?.id !== activeSongIdRef.current) {
+      activeSongIdRef.current = currentSong?.id || null;
+      isEndingSongRef.current = false;
+    }
+  }, [currentSong?.id]);
+
   // Mobile-friendly LAN URL detection
   useEffect(() => {
     if (typeof window !== "undefined" && roomId) {
@@ -172,6 +184,14 @@ function HostRoomContent({ params }: HostPageProps) {
 
   // Show scoring celebration and then trigger next song
   const showScoringAndEnd = useCallback((finishedSong: QueueItem | null) => {
+    // Immediately stop ongoing video playback to prevent any background loop
+    if (videoRef.current) {
+      videoRef.current.pause();
+    }
+    if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
+      ytPlayerRef.current.stopVideo();
+    }
+
     if (!finishedSong) {
       const socket = getSocket();
       socket.emit("client:song-ended", { roomId });
@@ -186,16 +206,6 @@ function HostRoomContent({ params }: HostPageProps) {
 
     // Play fanfare and applause
     soundEngine.playCheer();
-
-    const scoreResult = {
-      score: finalScore,
-      title: randomTitle,
-      songTitle: finishedSong.title,
-      singerName: finishedSong.requestedBy || "Ca sĩ bí ẩn",
-    };
-
-    // Note: Scoring is now displayed only on Host screen (per user requirement)
-    const socket = getSocket();
 
     setScoreData({
       score: finalScore,
@@ -228,6 +238,7 @@ function HostRoomContent({ params }: HostPageProps) {
         if (scoreIntervalRef.current) clearInterval(scoreIntervalRef.current);
         setScoreData(null);
         setIsFadingOut(false);
+        const socket = getSocket();
         socket.emit("client:song-ended", { roomId });
         setCurrentTime(0);
         setDuration(0);
@@ -285,6 +296,11 @@ function HostRoomContent({ params }: HostPageProps) {
 
   // Natural song end (trigger scoring then advance)
   const handleSongEnded = useCallback(() => {
+    if (isEndingSongRef.current) {
+      console.log("[Host] Song end already in progress, ignoring duplicate trigger");
+      return;
+    }
+    isEndingSongRef.current = true;
     console.log(`[Host] Video ended naturally for: ${currentSongRef.current?.title}`);
     showScoringAndEnd(currentSongRef.current);
   }, [showScoringAndEnd]);
@@ -493,10 +509,11 @@ function HostRoomContent({ params }: HostPageProps) {
           ytPlayerRef.current.pauseVideo();
         }
       } else if (cmd.action === "skip") {
-        console.log("[Host] Song skipped early - NO SCORING");
+        console.log("[Host] Song skipped by controller - NO SCORING");
         if (scoreIntervalRef.current) clearInterval(scoreIntervalRef.current);
         setScoreData(null);
         setIsFadingOut(false);
+        isEndingSongRef.current = false;
         if (videoRef.current) {
           videoRef.current.pause();
           videoRef.current.currentTime = 0;
@@ -504,8 +521,7 @@ function HostRoomContent({ params }: HostPageProps) {
         if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
           ytPlayerRef.current.stopVideo();
         }
-        const socket = getSocket();
-        socket.emit("client:song-ended", { roomId });
+        // Do NOT emit client:song-ended here because server already called nextSong()!
         setCurrentTime(0);
         setDuration(0);
       } else if (cmd.action === "volume" && typeof cmd.value === "number") {
@@ -712,6 +728,7 @@ function HostRoomContent({ params }: HostPageProps) {
             {/* 1. LOCAL HTML5 VIDEO WITH WEB AUDIO API PROCESSOR */}
             {currentSong.source === "local" && (
               <video
+                key={currentSong.id || currentSong.url}
                 ref={videoRef}
                 src={currentSong.url}
                 autoPlay
@@ -770,6 +787,7 @@ function HostRoomContent({ params }: HostPageProps) {
             {currentSong.source === "youtube" && currentSong.youtubeId && (
               <div className="w-full h-full pointer-events-none scale-[1.02]">
                 <YouTube
+                  key={currentSong.id || currentSong.youtubeId}
                   videoId={currentSong.youtubeId}
                   opts={{
                     width: "100%",
@@ -797,7 +815,9 @@ function HostRoomContent({ params }: HostPageProps) {
                   onEnd={handleSongEnded}
                   onError={(err) => {
                     console.error("[Host] YouTube playback error:", err);
-                    handleSongEnded();
+                    if (!isEndingSongRef.current) {
+                      handleSongEnded();
+                    }
                   }}
                   className="w-full h-full object-cover"
                 />
