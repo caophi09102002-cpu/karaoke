@@ -19,6 +19,7 @@ import {
   Smartphone,
   ExternalLink,
   FileText,
+  Lock,
 } from "lucide-react";
 
 // Dynamically import react-youtube to avoid SSR hydration issues
@@ -186,38 +187,53 @@ export default function PocketVideoMirror({
         </div>
 
         {/* Video Area */}
-        <div className="aspect-video w-full bg-black relative">
+        <div className="aspect-video w-full bg-black relative select-none">
           {currentSong?.youtubeId ? (
-            <YouTube
-              videoId={currentSong.youtubeId}
-              opts={{
-                width: "100%",
-                height: "100%",
-                playerVars: {
-                  autoplay: 1,
-                  controls: 0,
-                  mute: 1, // STRICT 100% MUTED
-                  modestbranding: 1,
-                  rel: 0,
-                  playsinline: 1,
-                  iv_load_policy: 3,
-                },
-              }}
-              onReady={(event) => {
-                playerRef.current = event.target;
-                event.target.mute();
-                event.target.setVolume(0);
-                if (currentTime > 0) {
-                  event.target.seekTo(currentTime, true);
-                }
-                if (isPlaying) {
-                  event.target.playVideo();
-                } else {
-                  event.target.pauseVideo();
-                }
-              }}
-              className="w-full h-full object-cover pointer-events-none"
-            />
+            <div className="w-full h-full relative">
+              <YouTube
+                videoId={currentSong.youtubeId}
+                opts={{
+                  width: "100%",
+                  height: "100%",
+                  playerVars: {
+                    autoplay: 1,
+                    controls: 0,
+                    disablekb: 1,
+                    fs: 0,
+                    mute: 1, // STRICT 100% MUTED
+                    modestbranding: 1,
+                    rel: 0,
+                    playsinline: 1,
+                    iv_load_policy: 3,
+                  },
+                }}
+                onReady={(event) => {
+                  playerRef.current = event.target;
+                  event.target.mute();
+                  event.target.setVolume(0);
+                  if (currentTime > 0) {
+                    event.target.seekTo(currentTime, true);
+                  }
+                  if (isPlaying) {
+                    event.target.playVideo();
+                  } else {
+                    event.target.pauseVideo();
+                  }
+                }}
+                className="w-full h-full object-cover pointer-events-none select-none"
+              />
+              {/* Invisible touch/click barrier to prevent accidental pause */}
+              <div
+                className="absolute inset-0 z-10 cursor-default"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                }}
+              />
+            </div>
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center text-zinc-500 text-xs">
               <Tv className="w-6 h-6 mb-1 text-zinc-600" />
@@ -253,8 +269,8 @@ export default function PocketVideoMirror({
                 Màn hình phụ (Live Mirror)
               </span>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono uppercase bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Đồng bộ TV
+                <Lock className="w-2.5 h-2.5 text-emerald-400" />
+                Khóa chạm • Khớp TV
               </span>
             </div>
             <p className="text-[10px] md:text-xs text-zinc-400 flex items-center gap-1 truncate font-normal">
@@ -319,7 +335,7 @@ export default function PocketVideoMirror({
 
       {/* 2. MAIN THEATER STAGE */}
       <div className="flex-1 flex flex-col items-center justify-center p-2 md:p-6 min-h-0 relative">
-        <div className="w-full max-w-4xl aspect-video bg-zinc-950 rounded-2xl md:rounded-3xl overflow-hidden border border-white/[0.1] shadow-2xl relative flex items-center justify-center">
+        <div className="w-full max-w-4xl aspect-video bg-zinc-950 rounded-2xl md:rounded-3xl overflow-hidden border border-white/[0.1] shadow-2xl relative flex items-center justify-center select-none">
           {currentSong?.youtubeId ? (
             <div className="w-full h-full relative">
               <YouTube
@@ -329,7 +345,9 @@ export default function PocketVideoMirror({
                   height: "100%",
                   playerVars: {
                     autoplay: 1,
-                    controls: 1,
+                    controls: 0,
+                    disablekb: 1,
+                    fs: 0,
                     mute: 1, // STRICT 100% MUTED TO PREVENT ECHO
                     modestbranding: 1,
                     rel: 0,
@@ -350,12 +368,30 @@ export default function PocketVideoMirror({
                     event.target.pauseVideo();
                   }
                 }}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover pointer-events-none select-none"
               />
+
+              {/* Invisible touch/click barrier to prevent accidental pause */}
+              <div
+                className="absolute inset-0 z-10 cursor-default"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                }}
+              />
+
+              {/* Locked Badge Overlay */}
+              <div className="absolute top-3 left-3 z-20 px-2.5 py-1 rounded-xl bg-black/75 backdrop-blur-md border border-white/10 text-[11px] text-zinc-300 flex items-center gap-1.5 pointer-events-none shadow-lg">
+                <Lock className="w-3 h-3 text-emerald-400" />
+                <span className="font-medium">Đã khóa thao tác • Luôn khớp TV</span>
+              </div>
 
               {/* Pause Indicator overlay if TV paused */}
               {!isPlaying && (
-                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-center p-4 pointer-events-none">
+                <div className="absolute inset-0 z-20 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-center p-4 pointer-events-none">
                   <div className="w-12 h-12 rounded-full bg-zinc-800 border border-white/[0.1] flex items-center justify-center mb-2">
                     <Tv className="w-6 h-6 text-zinc-300" />
                   </div>
@@ -363,6 +399,31 @@ export default function PocketVideoMirror({
                   <p className="text-xs text-zinc-400 mt-0.5">Hình ảnh sẽ tiếp tục chạy khi TV tiếp tục phát</p>
                 </div>
               )}
+            </div>
+          ) : currentSong?.url ? (
+            <div className="w-full h-full relative select-none">
+              <video
+                src={currentSong.url}
+                autoPlay
+                playsInline
+                muted
+                controls={false}
+                className="w-full h-full object-contain pointer-events-none select-none"
+              />
+              <div
+                className="absolute inset-0 z-10 cursor-default"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                }}
+              />
+              <div className="absolute top-3 left-3 z-20 px-2.5 py-1 rounded-xl bg-black/75 backdrop-blur-md border border-white/10 text-[11px] text-zinc-300 flex items-center gap-1.5 pointer-events-none shadow-lg">
+                <Lock className="w-3 h-3 text-emerald-400" />
+                <span className="font-medium">Đã khóa thao tác • Luôn khớp TV</span>
+              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center text-center p-6 space-y-3">
