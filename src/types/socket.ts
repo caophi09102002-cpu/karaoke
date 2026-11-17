@@ -83,6 +83,7 @@ export type ControlAction =
   | "play"
   | "pause"
   | "skip"
+  | "end-song"
   | "volume"
   | "mute-vocal"
   | "unmute-vocal"

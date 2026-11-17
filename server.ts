@@ -443,6 +443,23 @@ app.prepare().then(() => {
         return;
       }
 
+      // End Song / Score Now: Early finish by Admin or Song Owner (avoids outro & end-screen)
+      if (action === "end-song") {
+        if (!isAdmin && !isSongOwner) {
+          socket.emit("server:error", {
+            message:
+              "Chỉ chủ phòng hoặc người đang hát mới có quyền kết thúc bài để chấm điểm!",
+          });
+          return;
+        }
+
+        console.log(
+          `🏁 [End Song Authorized] Room ${roomId} ended early by ${isAdmin ? "ADMIN" : "SONG OWNER"} for scoring`
+        );
+        io.to(roomId).emit("host:control", { action: "end-song" });
+        return;
+      }
+
       // Other control actions (play, pause, mute-vocal, pitch): Only Admin or TV Host
       if (!isAdmin) {
         console.warn(`⛔ [Permission Denied] Socket ${socket.id} attempted control action "${action}" in room ${roomId}`);

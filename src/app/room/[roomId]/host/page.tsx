@@ -524,6 +524,17 @@ function HostRoomContent({ params }: HostPageProps) {
         // Do NOT emit client:song-ended here because server already called nextSong()!
         setCurrentTime(0);
         setDuration(0);
+      } else if (cmd.action === "end-song") {
+        console.log("[Host] Song ended early by user (skip outro) -> Trigger Scoring");
+        if (!isEndingSongRef.current) {
+          if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === "function") {
+            ytPlayerRef.current.pauseVideo();
+          }
+          if (videoRef.current) {
+            videoRef.current.pause();
+          }
+          handleSongEnded();
+        }
       } else if (cmd.action === "volume" && typeof cmd.value === "number") {
         if (videoRef.current) {
           videoRef.current.volume = cmd.value / 100;
@@ -636,6 +647,16 @@ function HostRoomContent({ params }: HostPageProps) {
           const dur = ytPlayerRef.current.getDuration() || currentSong.duration || 0;
           setCurrentTime(curr);
           if (dur > 0) setDuration(dur);
+
+          // Proactive end detection: before YouTube hits the final frame and renders end-screen recommendations grid
+          if (dur > 10 && curr >= dur - 1.2 && !isEndingSongRef.current) {
+            console.log(`[Host] Video reached end threshold (${curr.toFixed(1)}s / ${dur.toFixed(1)}s). Stopping before YouTube end-screen`);
+            if (typeof ytPlayerRef.current.pauseVideo === "function") {
+              ytPlayerRef.current.pauseVideo();
+            }
+            handleSongEnded();
+            return;
+          }
 
           // Broadcast time update to controllers in room
           const socket = getSocket();
@@ -801,6 +822,8 @@ function HostRoomContent({ params }: HostPageProps) {
                       showinfo: 0,
                       iv_load_policy: 3,
                       fs: 0,
+                      loop: 1,
+                      playlist: currentSong.youtubeId,
                     },
                   }}
                   onReady={(event) => {
@@ -811,6 +834,16 @@ function HostRoomContent({ params }: HostPageProps) {
                       event.target.seekTo(initialSeekTimeRef.current, true);
                     }
                     setDuration(event.target.getDuration() || currentSong.duration);
+                  }}
+                  onStateChange={(event) => {
+                    // State 0 = ENDED: instantly pause and trigger scoring to prevent end-screen grid
+                    if (event.data === 0 && !isEndingSongRef.current) {
+                      console.log("[Host] YouTube state changed to ENDED (0)");
+                      if (typeof event.target.pauseVideo === "function") {
+                        event.target.pauseVideo();
+                      }
+                      handleSongEnded();
+                    }
                   }}
                   onEnd={handleSongEnded}
                   onError={(err) => {

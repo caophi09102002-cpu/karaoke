@@ -85,6 +85,7 @@ import {
   MoreHorizontal,
   ChevronUp,
   ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 interface ControllerPageProps {
@@ -176,6 +177,23 @@ function ControllerContent({ params }: ControllerPageProps) {
 
   // Pocket Video Mirror (Giải pháp 1.2: Màn hình phụ bỏ túi xem trực tiếp TV đã tắt tiếng)
   const [showVideoMirror, setShowVideoMirror] = useState<boolean>(false);
+  const [showMirrorHint, setShowMirrorHint] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const seen = localStorage.getItem("karaoke_mirror_hint_seen");
+      if (!seen) {
+        setShowMirrorHint(true);
+      }
+    }
+  }, []);
+
+  const dismissMirrorHint = () => {
+    setShowMirrorHint(false);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("karaoke_mirror_hint_seen", "true");
+    }
+  };
 
   // Handheld Synchronized Lyrics (Mục 2: Lời bài hát chạy trên điện thoại)
   const [showLyricsModal, setShowLyricsModal] = useState<boolean>(false);
@@ -626,8 +644,8 @@ function ControllerContent({ params }: ControllerPageProps) {
       userId && currentSong?.userId && currentSong.userId === userId
     );
 
-    // If skipping the song that I requested, allow it!
-    if (action === "skip" && (controllerRole === "admin" || isMySongPlaying)) {
+    // If skipping or ending the song that I requested (or as Admin), allow it!
+    if ((action === "skip" || action === "end-song") && (controllerRole === "admin" || isMySongPlaying)) {
       const socket = getSocket();
       socket.emit("client:control", {
         roomId,
@@ -636,7 +654,7 @@ function ControllerContent({ params }: ControllerPageProps) {
         userId,
         pin: adminPin || undefined,
       });
-      showToast("⏩ Đã chuyển bài hát");
+      showToast(action === "end-song" ? "🏁 Đang kết thúc bài để chấm điểm" : "⏩ Đã chuyển bài hát");
       return;
     }
 
@@ -1048,6 +1066,40 @@ function ControllerContent({ params }: ControllerPageProps) {
             isSearching={isSearching}
             placeholder="Tìm bài hát, ca sĩ hoặc gõ tắt (VD: cdns, nhnt)..."
           />
+
+          {/* Quick Companion / Mirror Live Banner if a song is playing */}
+          {currentSong && (
+            <div
+              onClick={() => {
+                setShowVideoMirror(true);
+                dismissMirrorHint();
+              }}
+              className="p-3 rounded-2xl bg-gradient-to-r from-indigo-950/70 via-purple-950/40 to-zinc-900 border border-indigo-500/30 flex items-center justify-between cursor-pointer active:scale-[0.99] transition-all shadow-lg hover:border-indigo-400/50 group"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300 shrink-0 group-hover:scale-105 transition-transform">
+                  <Tv className="w-4 h-4 text-indigo-400" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-white truncate">
+                      Màn hình phụ (Hát cùng)
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                      LIVE
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 truncate">
+                    Xem trực tiếp video TV trên điện thoại để hát theo
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 text-[11px] font-semibold text-indigo-300 bg-indigo-500/20 border border-indigo-500/30 px-3 py-1.5 rounded-xl shrink-0 group-hover:bg-indigo-500/30 transition-colors">
+                <span>Mở xem</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </div>
+            </div>
+          )}
 
           {/* Curated Categories Carousel */}
           <div className="space-y-2">
@@ -1867,20 +1919,45 @@ function ControllerContent({ params }: ControllerPageProps) {
 
               {currentSong && (
                 <>
-                  {/* POCKET VIDEO MIRROR BUTTON */}
-                  <button
-                    onClick={() => setShowVideoMirror(true)}
-                    className="relative p-2 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-300 rounded-xl transition-all cursor-pointer flex items-center justify-center active:scale-95"
-                    title="Màn hình phụ bỏ túi: Xem trực tiếp video TV trên điện thoại"
-                  >
-                    <Tv className="w-3.5 h-3.5 text-zinc-300" />
-                    {isPlaying && (
-                      <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                      </span>
+                  {/* POCKET VIDEO MIRROR BUTTON (Màn hình phụ / Hát cùng) */}
+                  <div className="relative">
+                    {/* First-time User Hint Tooltip */}
+                    {showMirrorHint && isPlaying && (
+                      <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-50 bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[10.5px] font-medium px-2.5 py-1.5 rounded-xl shadow-2xl border border-white/20 flex items-center gap-1.5 animate-bounce whitespace-nowrap pointer-events-auto">
+                        <Sparkles className="w-3 h-3 text-amber-300 shrink-0" />
+                        <span>Chạm &quot;Hát cùng&quot; để mở màn hình phụ!</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            dismissMirrorHint();
+                          }}
+                          className="ml-1 p-0.5 text-white/70 hover:text-white rounded transition"
+                          title="Đóng gợi ý"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-indigo-600 rotate-45 border-r border-b border-white/20" />
+                      </div>
                     )}
-                  </button>
+
+                    <button
+                      onClick={() => {
+                        setShowVideoMirror(true);
+                        dismissMirrorHint();
+                      }}
+                      className="relative px-2.5 py-1.5 bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-200 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-sm"
+                      title="Màn hình phụ bỏ túi: Xem trực tiếp video TV trên điện thoại để hát theo"
+                    >
+                      <Tv className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                      <span className="text-[11px] font-semibold text-indigo-200 tracking-tight">Hát cùng</span>
+                      {isPlaying && (
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                      )}
+                    </button>
+                  </div>
 
                   {/* LYRICS BUTTON */}
                   <button
@@ -1893,6 +1970,15 @@ function ControllerContent({ params }: ControllerPageProps) {
 
                   {controllerRole === "admin" ? (
                     <>
+                      {/* FINISH SONG / SCORE NOW */}
+                      <button
+                        onClick={() => sendControl("end-song")}
+                        className="p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-300 hover:text-amber-200 rounded-xl transition-all cursor-pointer flex items-center justify-center active:scale-95"
+                        title="Chấm điểm ngay (Bỏ qua nhạc dạo kết bài & tránh video đề xuất)"
+                      >
+                        <Award className="w-3.5 h-3.5 text-amber-400" />
+                      </button>
+
                       <button
                         onClick={() => sendControl(isPlaying ? "pause" : "play")}
                         className="p-2 bg-white hover:bg-zinc-200 text-zinc-950 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
@@ -1912,14 +1998,24 @@ function ControllerContent({ params }: ControllerPageProps) {
                   ) : (
                     <div className="flex items-center gap-1.5">
                       {currentSong.userId && currentSong.userId === userId && (
-                        <button
-                          onClick={() => sendControl("skip")}
-                          className="px-2 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[11px] font-medium active:scale-95"
-                          title="Bỏ qua bài hát do bạn chọn"
-                        >
-                          <SkipForward className="w-3 h-3 text-rose-400" />
-                          <span>Bỏ qua</span>
-                        </button>
+                        <>
+                          <button
+                            onClick={() => sendControl("end-song")}
+                            className="px-2 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-300 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[11px] font-medium active:scale-95"
+                            title="Hát xong câu cuối - Chấm điểm ngay"
+                          >
+                            <Award className="w-3 h-3 text-amber-400" />
+                            <span>Chấm điểm</span>
+                          </button>
+                          <button
+                            onClick={() => sendControl("skip")}
+                            className="px-2 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[11px] font-medium active:scale-95"
+                            title="Bỏ qua bài hát do bạn chọn"
+                          >
+                            <SkipForward className="w-3 h-3 text-rose-400" />
+                            <span>Bỏ qua</span>
+                          </button>
+                        </>
                       )}
 
                       <button

@@ -51,7 +51,23 @@ export default function PocketVideoMirror({
   const [lastSyncDrift, setLastSyncDrift] = useState<number>(0);
   const [isMiniView, setIsMiniView] = useState<boolean>(false);
   const [isNativeFullscreen, setIsNativeFullscreen] = useState<boolean>(false);
+  const [isSongFinished, setIsSongFinished] = useState<boolean>(false);
   const wakeLockRef = useRef<any>(null);
+
+  // Reset finished state whenever currentSong changes
+  useEffect(() => {
+    setIsSongFinished(false);
+  }, [currentSong?.id, currentSong?.youtubeId]);
+
+  // Proactive end detection: before YouTube hits the very last frame and shows end-screen grid
+  useEffect(() => {
+    if (currentSong?.duration && currentSong.duration > 10 && currentTime >= currentSong.duration - 1.5) {
+      setIsSongFinished(true);
+      if (playerRef.current && typeof playerRef.current.pauseVideo === "function") {
+        playerRef.current.pauseVideo();
+      }
+    }
+  }, [currentTime, currentSong?.duration]);
 
   // 1. Keep Screen Awake while Pocket Video Mirror is open
   useEffect(() => {
@@ -188,7 +204,12 @@ export default function PocketVideoMirror({
 
         {/* Video Area */}
         <div className="aspect-video w-full bg-black relative select-none">
-          {currentSong?.youtubeId ? (
+          {isSongFinished ? (
+            <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center bg-zinc-950 text-white">
+              <CheckCircle2 className="w-5 h-5 mb-1 text-emerald-400" />
+              <span className="text-[10px] text-zinc-300 font-medium">Đã hết bài hát</span>
+            </div>
+          ) : currentSong?.youtubeId ? (
             <div className="w-full h-full relative">
               <YouTube
                 videoId={currentSong.youtubeId}
@@ -205,6 +226,8 @@ export default function PocketVideoMirror({
                     rel: 0,
                     playsinline: 1,
                     iv_load_policy: 3,
+                    loop: 1,
+                    playlist: currentSong.youtubeId,
                   },
                 }}
                 onReady={(event) => {
@@ -217,6 +240,12 @@ export default function PocketVideoMirror({
                   if (isPlaying) {
                     event.target.playVideo();
                   } else {
+                    event.target.pauseVideo();
+                  }
+                }}
+                onStateChange={(event) => {
+                  if (event.data === 0) {
+                    setIsSongFinished(true);
                     event.target.pauseVideo();
                   }
                 }}
@@ -336,7 +365,17 @@ export default function PocketVideoMirror({
       {/* 2. MAIN THEATER STAGE */}
       <div className="flex-1 flex flex-col items-center justify-center p-2 md:p-6 min-h-0 relative">
         <div className="w-full max-w-4xl aspect-video bg-zinc-950 rounded-2xl md:rounded-3xl overflow-hidden border border-white/[0.1] shadow-2xl relative flex items-center justify-center select-none">
-          {currentSong?.youtubeId ? (
+          {isSongFinished ? (
+            <div className="flex flex-col items-center justify-center text-center p-6 space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                <CheckCircle2 className="w-7 h-7" />
+              </div>
+              <h3 className="text-base font-semibold text-white">Bài hát đã hoàn tất</h3>
+              <p className="text-xs text-zinc-400 max-w-sm leading-relaxed">
+                Màn hình TV đang tổng kết điểm số. Màn hình phụ sẽ tự động chuyển bài tiếp theo...
+              </p>
+            </div>
+          ) : currentSong?.youtubeId ? (
             <div className="w-full h-full relative">
               <YouTube
                 videoId={currentSong.youtubeId}
@@ -353,6 +392,8 @@ export default function PocketVideoMirror({
                     rel: 0,
                     playsinline: 1,
                     iv_load_policy: 3,
+                    loop: 1,
+                    playlist: currentSong.youtubeId,
                   },
                 }}
                 onReady={(event) => {
@@ -365,6 +406,12 @@ export default function PocketVideoMirror({
                   if (isPlaying) {
                     event.target.playVideo();
                   } else {
+                    event.target.pauseVideo();
+                  }
+                }}
+                onStateChange={(event) => {
+                  if (event.data === 0) {
+                    setIsSongFinished(true);
                     event.target.pauseVideo();
                   }
                 }}
