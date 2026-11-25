@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -15,12 +15,25 @@ import {
   Sparkles,
   QrCode,
   Zap,
+  X,
 } from "lucide-react";
 
 export default function HomePage() {
   const router = useRouter();
   const [joinCode, setJoinCode] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [lastHostRoom, setLastHostRoom] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("karaoke_last_host_room");
+      if (saved && saved.trim()) {
+        setLastHostRoom(saved.trim().toUpperCase());
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const handleCreateNewRoom = () => {
     setIsCreating(true);
@@ -28,10 +41,29 @@ export default function HomePage() {
     router.push(`/room/${newRoomId}/host`);
   };
 
-  const handleJoinAsController = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleJoinAsController = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!joinCode.trim()) return;
     router.push(`/room/${joinCode.trim().toUpperCase()}/controller`);
+  };
+
+  const handleJoinAsHost = () => {
+    if (!joinCode.trim()) return;
+    router.push(`/room/${joinCode.trim().toUpperCase()}/host`);
+  };
+
+  const handleResumeLastHost = () => {
+    if (!lastHostRoom) return;
+    router.push(`/room/${lastHostRoom}/host`);
+  };
+
+  const handleDismissLastHost = () => {
+    setLastHostRoom(null);
+    try {
+      localStorage.removeItem("karaoke_last_host_room");
+    } catch {
+      // ignore
+    }
   };
 
   return (
@@ -141,24 +173,62 @@ export default function HomePage() {
             Mở TV làm sân khấu chính, cùng điện thoại làm bàn chọn bài. Tận hưởng chất lượng âm thanh và hình ảnh đồng bộ tức thì không độ trễ.
           </p>
 
-          {/* Action Row: Create Room Button + Join Room Code Form */}
+          {/* Action Row: TV Session Recovery + Create Room Button + Join Room Code Form */}
           <div className="w-full max-w-xl pt-2 space-y-3">
+            {/* 1-Touch TV Recovery Banner if user previously had a host session on this browser */}
+            {lastHostRoom && (
+              <div className="w-full p-3.5 rounded-2xl bg-indigo-950/80 border border-indigo-500/40 backdrop-blur-xl flex items-center justify-between gap-3 text-left animate-in fade-in slide-in-from-top-2 shadow-lg shadow-indigo-950/50">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shrink-0">
+                    <Tv className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-white flex items-center gap-1.5 truncate">
+                      <span>Tiếp tục làm TV phòng</span>
+                      <span className="font-mono text-indigo-300 bg-indigo-500/20 px-1.5 py-0.5 rounded text-[11px] border border-indigo-400/30">
+                        {lastHostRoom}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-zinc-300 truncate">
+                      Khôi phục phiên phát TV đã mở trước đó
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={handleResumeLastHost}
+                    className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer shadow active:scale-95"
+                  >
+                    <span>Mở lại TV</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={handleDismissLastHost}
+                    className="p-1.5 rounded-xl hover:bg-white/10 text-zinc-400 hover:text-white transition cursor-pointer"
+                    title="Bỏ qua"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               {/* Create Room Button with energetic crimson gradient */}
               <button
                 onClick={handleCreateNewRoom}
                 disabled={isCreating}
-                className="group relative px-6 py-3.5 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white font-bold text-sm sm:text-base transition-all duration-200 flex items-center justify-center gap-2.5 shadow-xl shadow-red-950/60 disabled:opacity-50 cursor-pointer active:scale-[0.98] shrink-0"
+                className="group relative px-5 py-3.5 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white font-bold text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-xl shadow-red-950/60 disabled:opacity-50 cursor-pointer active:scale-[0.98] shrink-0"
               >
                 <Plus className="w-4 h-4 stroke-[3]" />
-                <span>{isCreating ? "Đang chuẩn bị..." : "Tạo phòng TV mới"}</span>
+                <span>{isCreating ? "Đang tạo..." : "Tạo phòng TV mới"}</span>
                 <ArrowRight className="w-4 h-4 text-white/80 group-hover:translate-x-1 transition-transform" />
               </button>
 
-              {/* Join Code Input Form */}
-              <form onSubmit={handleJoinAsController} className="flex-1 flex items-center gap-2">
+              {/* Join Code Input Form with 2 Options: Vào chọn bài or Mở làm TV */}
+              <form onSubmit={handleJoinAsController} className="flex-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <div className="relative flex-1">
-                  <QrCode className="w-4 h-4 text-zinc-500 absolute left-3.5 pointer-events-none" />
+                  <QrCode className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     type="text"
                     value={joinCode}
@@ -168,14 +238,29 @@ export default function HomePage() {
                     className="w-full bg-zinc-950/80 border border-white/[0.12] focus:border-red-500/80 rounded-2xl pl-10 pr-3 py-3.5 text-[16px] md:text-sm font-mono tracking-wider text-white uppercase placeholder:text-zinc-500 placeholder:normal-case placeholder:tracking-normal focus:outline-none transition-colors backdrop-blur-md"
                   />
                 </div>
-                <button
-                  type="submit"
-                  disabled={!joinCode.trim()}
-                  className="px-4 py-3.5 rounded-2xl bg-zinc-900/90 hover:bg-zinc-800 disabled:opacity-40 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-white/[0.1] active:scale-95 shrink-0 backdrop-blur-md"
-                >
-                  <Smartphone className="w-4 h-4 text-red-400 stroke-[2]" />
-                  <span className="hidden sm:inline">Vào điều khiển</span>
-                </button>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="submit"
+                    disabled={!joinCode.trim()}
+                    className="flex-1 sm:flex-none px-3.5 py-3.5 rounded-2xl bg-zinc-900/90 hover:bg-zinc-800 disabled:opacity-40 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-white/[0.1] active:scale-95 backdrop-blur-md"
+                    title="Vào điều khiển & chọn bài hát"
+                  >
+                    <Smartphone className="w-4 h-4 text-red-400 stroke-[2]" />
+                    <span>Vào chọn bài</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={!joinCode.trim()}
+                    onClick={handleJoinAsHost}
+                    className="flex-1 sm:flex-none px-3.5 py-3.5 rounded-2xl bg-indigo-950/80 hover:bg-indigo-900/90 disabled:opacity-40 text-indigo-200 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-indigo-500/30 active:scale-95 backdrop-blur-md"
+                    title="Mở thiết bị này làm màn hình phát TV"
+                  >
+                    <Tv className="w-4 h-4 text-indigo-400 stroke-[2]" />
+                    <span>Làm TV</span>
+                  </button>
+                </div>
               </form>
             </div>
           </div>

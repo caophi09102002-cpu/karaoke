@@ -133,11 +133,31 @@ function HostRoomContent({ params }: HostPageProps) {
     socket.emit("client:close-room", { roomId, pin: hostPin }, (res: any) => {
       try {
         localStorage.removeItem("karaoke_last_room_id");
+        localStorage.removeItem("karaoke_last_host_room");
         localStorage.removeItem(`karaoke_admin_pin_${roomId}`);
       } catch (e) {}
       router.push("/");
     });
   }, [roomId, hostPin, router]);
+
+  // Persist TV Host Room Session & Accidental Exit Protection (beforeunload)
+  useEffect(() => {
+    if (typeof window === "undefined" || !roomId) return;
+    try {
+      localStorage.setItem("karaoke_last_host_room", roomId);
+    } catch (e) {}
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "Bạn có chắc chắn muốn rời khỏi màn hình TV? Buổi hát sẽ bị gián đoạn!";
+      return e.returnValue;
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [roomId]);
 
   // Refs
   const videoRef = useRef<HTMLVideoElement | null>(null);

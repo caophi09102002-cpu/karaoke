@@ -1050,6 +1050,26 @@ function ControllerContent({ params }: ControllerPageProps) {
                 </div>
               </button>
             )}
+
+            {/* Switch this device to TV Host */}
+            <button
+              onClick={() => {
+                setShowQuickMenu(false);
+                router.push(`/room/${roomId}/host`);
+              }}
+              className="p-2.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-indigo-300 flex items-center gap-2.5 transition-colors cursor-pointer text-left col-span-2"
+            >
+              <Tv className="w-4 h-4 text-indigo-400 stroke-[1.75] shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold flex items-center justify-between">
+                  <span>Chuyển thiết bị này làm màn hình TV</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-indigo-400" />
+                </div>
+                <div className="text-[10px] text-zinc-400">
+                  Phát video TV trực tiếp từ máy này (khi TV bị thoát hoặc muốn thay thế)
+                </div>
+              </div>
+            </button>
           </div>
         </div>
       )}
@@ -1872,69 +1892,33 @@ function ControllerContent({ params }: ControllerPageProps) {
       )}
 
       {/* =========================================================================
-          PERSISTENT QUICK REACTIONS FLOATING BAR (🔥, ❤️, 👏, 🍻, 💯)
-          Allows instant reaction from any tab without interrupting search/queue
-         ========================================================================= */}
-      <div className="fixed bottom-28 left-0 right-0 max-w-md mx-auto px-4 pointer-events-none z-30">
-        <div className="pointer-events-auto bg-zinc-900/90 backdrop-blur-2xl border border-white/[0.1] rounded-full px-3 py-1.5 shadow-2xl flex items-center justify-between gap-1 max-w-xs mx-auto">
-          {["🔥", "❤️", "👏", "🍻", "💯"].map((em) => (
-            <button
-              key={em}
-              onClick={() => handleSendReaction("emoji", em)}
-              className="p-1.5 hover:bg-white/[0.08] active:scale-125 rounded-full text-lg transition-transform cursor-pointer"
-              title={`Bắn ${em} lên TV`}
-            >
-              {em}
-            </button>
-          ))}
-          <div className="h-4 w-px bg-white/[0.1] mx-1" />
-          <button
-            onClick={() => setActiveTab("soundboard")}
-            className="text-[10px] font-medium text-zinc-300 hover:text-white px-1.5 py-0.5 rounded transition-colors whitespace-nowrap cursor-pointer"
-            title="Mở bảng bắn chữ Danmaku"
-          >
-            Bắn chữ 💬
-          </button>
-        </div>
-      </div>
-
-      {/* =========================================================================
           PINNED MINI PLAYER BAR (Sleek, Compact & Non-Obtrusive)
          ========================================================================= */}
       <div className="fixed bottom-14 left-0 right-0 max-w-md mx-auto px-3 py-1.5 z-30 pointer-events-auto">
-        <div className="p-2.5 sm:p-3 bg-zinc-900/98 backdrop-blur-2xl border border-white/[0.1] rounded-2xl shadow-2xl flex flex-col gap-2">
+        <div className="p-2 sm:p-2.5 bg-zinc-900/98 backdrop-blur-2xl border border-white/[0.1] rounded-2xl shadow-2xl flex flex-col gap-2">
           {/* Row 1: Song Info & Controls */}
-          <div className="flex items-center justify-between gap-2.5">
-            <div className="flex items-center gap-2 overflow-hidden flex-1">
-              <div className="p-1.5 bg-white/[0.08] border border-white/[0.08] rounded-xl text-zinc-200 shrink-0">
+          <div className="flex items-center justify-between gap-2">
+            {/* Song info with guaranteed min-w-0 flex-1 for truncation */}
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <div className="p-1.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl shrink-0">
                 <Music className="w-3.5 h-3.5" />
               </div>
-              <div className="overflow-hidden">
+              <div className="min-w-0 flex-1">
                 <div className="text-xs font-semibold text-white truncate">
                   {currentSong ? currentSong.title : "TV đang ở chế độ chờ"}
                 </div>
-                <div className="text-[10px] sm:text-[11px] text-zinc-400 truncate">
-                  {currentSong ? `${currentSong.artist}` : "Chọn bài bên dưới để bắt đầu"}
+                <div className="text-[10px] text-zinc-400 truncate">
+                  {currentSong ? currentSong.artist : "Chọn bài bên dưới để bắt đầu"}
                 </div>
               </div>
             </div>
 
-            {/* Quick Remote Controls */}
-            <div className="flex items-center gap-1.5 shrink-0">
-              {/* CAST TO TV BUTTON */}
-              <CastButton
-                variant="player"
-                status={castStatus}
-                tvName={tvName}
-                roomId={roomId}
-                pingMs={pingMs}
-                onClick={() => setShowCastModal(true)}
-              />
-
+            {/* Quick Remote Controls (Compact icons fitting any mobile screen) */}
+            <div className="flex items-center gap-1 shrink-0">
               {currentSong && (
                 <>
                   {/* POCKET VIDEO MIRROR BUTTON (Màn hình phụ / Hát cùng) */}
-                  <div className="relative">
+                  <div className="relative shrink-0">
                     {/* First-time User Hint Tooltip */}
                     {showMirrorHint && isPlaying && (
                       <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-50 bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[10.5px] font-medium px-2.5 py-1.5 rounded-xl shadow-2xl border border-white/20 flex items-center gap-1.5 animate-bounce whitespace-nowrap pointer-events-auto">
@@ -1959,7 +1943,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                         setShowVideoMirror(true);
                         dismissMirrorHint();
                       }}
-                      className="relative px-2.5 py-1.5 bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-200 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-sm"
+                      className="px-2 py-1.5 bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-200 rounded-xl transition-all cursor-pointer flex items-center gap-1 active:scale-95 shadow-sm"
                       title="Màn hình phụ bỏ túi: Xem trực tiếp video TV trên điện thoại để hát theo"
                     >
                       <Tv className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
@@ -1976,7 +1960,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                   {/* LYRICS BUTTON */}
                   <button
                     onClick={handleOpenLyrics}
-                    className="p-2 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-300 rounded-xl transition-all cursor-pointer flex items-center justify-center active:scale-95"
+                    className="p-1.5 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-300 rounded-xl transition-all cursor-pointer flex items-center justify-center active:scale-95 shrink-0"
                     title="Xem lời bài hát chạy trên điện thoại"
                   >
                     <FileText className="w-3.5 h-3.5 text-zinc-300" />
@@ -1987,7 +1971,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                       {/* FINISH SONG / SCORE NOW */}
                       <button
                         onClick={() => sendControl("end-song")}
-                        className="p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-300 hover:text-amber-200 rounded-xl transition-all cursor-pointer flex items-center justify-center active:scale-95"
+                        className="p-1.5 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 hover:text-amber-200 rounded-xl transition-all cursor-pointer flex items-center justify-center active:scale-95 shrink-0"
                         title="Chấm điểm ngay (Bỏ qua nhạc dạo kết bài & tránh video đề xuất)"
                       >
                         <Award className="w-3.5 h-3.5 text-amber-400" />
@@ -1995,7 +1979,7 @@ function ControllerContent({ params }: ControllerPageProps) {
 
                       <button
                         onClick={() => sendControl(isPlaying ? "pause" : "play")}
-                        className="p-2 bg-white hover:bg-zinc-200 text-zinc-950 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
+                        className="p-1.5 bg-white hover:bg-zinc-200 text-zinc-950 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95 shrink-0"
                         title={isPlaying ? "Tạm dừng" : "Tiếp tục phát"}
                       >
                         {isPlaying ? <Pause className="w-3.5 h-3.5 fill-zinc-950" /> : <Play className="w-3.5 h-3.5 fill-zinc-950" />}
@@ -2003,31 +1987,29 @@ function ControllerContent({ params }: ControllerPageProps) {
 
                       <button
                         onClick={() => sendControl("skip")}
-                        className="p-2 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-300 hover:text-white rounded-xl transition-all cursor-pointer active:scale-95"
+                        className="p-1.5 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-300 hover:text-white rounded-xl transition-all cursor-pointer active:scale-95 shrink-0"
                         title="Bỏ qua bài này (không chấm điểm)"
                       >
                         <SkipForward className="w-3.5 h-3.5" />
                       </button>
                     </>
                   ) : (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1 shrink-0">
                       {currentSong.userId && currentSong.userId === userId && (
                         <>
                           <button
                             onClick={() => sendControl("end-song")}
-                            className="px-2 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-300 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[11px] font-medium active:scale-95"
+                            className="p-1.5 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 rounded-xl transition-all cursor-pointer flex items-center justify-center active:scale-95 shrink-0"
                             title="Hát xong câu cuối - Chấm điểm ngay"
                           >
-                            <Award className="w-3 h-3 text-amber-400" />
-                            <span>Chấm điểm</span>
+                            <Award className="w-3.5 h-3.5 text-amber-400" />
                           </button>
                           <button
                             onClick={() => sendControl("skip")}
-                            className="px-2 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[11px] font-medium active:scale-95"
+                            className="p-1.5 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 rounded-xl transition-all cursor-pointer flex items-center justify-center active:scale-95 shrink-0"
                             title="Bỏ qua bài hát do bạn chọn"
                           >
-                            <SkipForward className="w-3 h-3 text-rose-400" />
-                            <span>Bỏ qua</span>
+                            <SkipForward className="w-3.5 h-3.5 text-rose-400" />
                           </button>
                         </>
                       )}
@@ -2037,11 +2019,10 @@ function ControllerContent({ params }: ControllerPageProps) {
                           showToast("🔒 Nhập mã PIN 4 chữ số từ TV để mở khóa quyền Chủ phòng!");
                           setShowPinModal(true);
                         }}
-                        className="px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-white/[0.08] text-zinc-300 hover:text-white rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[11px]"
-                        title="Chỉ chủ phòng mới có quyền điều khiển"
+                        className="p-1.5 bg-zinc-800 hover:bg-zinc-700 border border-white/[0.08] text-zinc-300 hover:text-white rounded-xl transition-all cursor-pointer flex items-center justify-center active:scale-95 shrink-0"
+                        title="Nhập mã PIN để mở khóa quyền Chủ phòng"
                       >
-                        <Lock className="w-3 h-3 text-amber-400" />
-                        <span className="text-[10px] font-medium">Chủ phòng</span>
+                        <Lock className="w-3.5 h-3.5 text-amber-400" />
                       </button>
                     </div>
                   )}
@@ -2049,7 +2030,7 @@ function ControllerContent({ params }: ControllerPageProps) {
                   {/* Expand / Collapse Toggle for Tone & Seekbar */}
                   <button
                     onClick={() => setIsPlayerExpanded((prev) => !prev)}
-                    className={`p-2 rounded-xl border transition-all cursor-pointer active:scale-95 ${
+                    className={`p-1.5 rounded-xl border transition-all cursor-pointer active:scale-95 shrink-0 ${
                       isPlayerExpanded
                         ? "bg-amber-400/15 border-amber-400/40 text-amber-300"
                         : "bg-white/[0.06] hover:bg-white/[0.1] border-white/[0.08] text-zinc-400 hover:text-zinc-200"
