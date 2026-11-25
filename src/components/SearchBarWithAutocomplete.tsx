@@ -85,7 +85,7 @@ export default function SearchBarWithAutocomplete({
   };
 
   // Select suggestion item
-  const handleSelectSuggestion = (selectedText: string, e?: React.MouseEvent) => {
+  const handleSelectSuggestion = (selectedText: string, e?: React.SyntheticEvent) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -238,6 +238,7 @@ export default function SearchBarWithAutocomplete({
                   key={index}
                   onMouseEnter={() => setSelectedIndex(index)}
                   onMouseDown={(e) => handleSelectSuggestion(item, e)}
+                  onTouchEnd={(e) => handleSelectSuggestion(item, e)}
                   className={`group px-3.5 py-2.5 flex items-center justify-between gap-3 cursor-pointer transition-colors ${
                     isSelected ? "bg-white/[0.08] text-white" : "hover:bg-white/[0.04] text-zinc-300"
                   }`}

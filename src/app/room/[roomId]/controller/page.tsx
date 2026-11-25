@@ -505,6 +505,7 @@ function ControllerContent({ params }: ControllerPageProps) {
     const query = target.trim();
     if (!query) return;
 
+    setSearchQuery(query);
     setIsSearching(true);
     setSearchedKeyword(query);
     setSelectedCategory("");
@@ -1318,6 +1319,19 @@ function ControllerContent({ params }: ControllerPageProps) {
                     </div>
                   );
                 })}
+              </div>
+            ) : searchedKeyword ? (
+              /* No Results Found for Searched Keyword */
+              <div className="py-12 px-4 rounded-2xl bg-zinc-900/30 border border-white/[0.06] text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-white/[0.08] flex items-center justify-center mx-auto text-zinc-400">
+                  <Search className="w-5 h-5 text-zinc-500" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-semibold text-white">Không tìm thấy kết quả</h4>
+                  <p className="text-xs text-zinc-400 max-w-xs mx-auto leading-relaxed">
+                    Không tìm thấy bài hát phù hợp cho từ khóa &quot;{searchedKeyword}&quot;. Hãy thử gõ tên bài ngắn gọn hơn hoặc gõ tên ca sĩ.
+                  </p>
+                </div>
               </div>
             ) : (
               /* Clean Empty State when user first enters the room */

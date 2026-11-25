@@ -11,7 +11,7 @@ export interface YouTubeSearchResult {
 }
 
 /**
- * Fallback popular Vietnamese Karaoke songs in case of external network block
+ * Fallback popular Vietnamese Karaoke songs only in case of complete network outage
  */
 const FALLBACK_KARAOKE_SONGS: YouTubeSearchResult[] = [
   {
@@ -68,67 +68,34 @@ function parseDurationToSeconds(durationStr?: string): number {
   return 240;
 }
 
-export async function GET(request: Request) {
+/**
+ * Perform YouTube public scrape search for a specific query string
+ */
+async function fetchYouTubeSearch(searchQuery: string): Promise<YouTubeSearchResult[]> {
   try {
-    const { searchParams } = new URL(request.url);
-    const rawQuery = searchParams.get("q");
-
-    if (!rawQuery || rawQuery.trim().length === 0) {
-      return NextResponse.json({
-        success: true,
-        query: "",
-        results: [],
-      });
-    }
-
-    // Requirement: Tự động nối thêm hậu tố 'karaoke beat' vào sau từ khóa (hỗ trợ mở rộng từ viết tắt)
-    const cleanedQuery = rawQuery.trim();
-    const expandedQuery = expandAcronymQuery(cleanedQuery);
-    const finalSearchQuery = `${expandedQuery} karaoke beat`;
-
-    console.log(
-      `[YouTube Search] Query: "${rawQuery}" (Expanded: "${expandedQuery}") -> Searching: "${finalSearchQuery}"`
-    );
-
-    // Fetch YouTube public search page
-    const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(
-      finalSearchQuery
-    )}`;
-
+    const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`;
     const response = await fetch(ytUrl, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
       },
-      next: { revalidate: 3600 }, // Cache search for 1 hour
+      next: { revalidate: 1800 }, // Cache search results for 30 minutes
     });
 
     if (!response.ok) {
       console.warn(`[YouTube Search] Fetch failed with status: ${response.status}`);
-      return NextResponse.json({
-        success: true,
-        query: finalSearchQuery,
-        results: FALLBACK_KARAOKE_SONGS.filter((s) =>
-          s.title.toLowerCase().includes(cleanedQuery.toLowerCase())
-        ),
-      });
+      return [];
     }
 
     const html = await response.text();
-
-    // Extract ytInitialData embedded in the page
     const match =
       html.match(/var ytInitialData = ({[\s\S]*?});<\/script>/) ||
       html.match(/ytInitialData\s*=\s*({[\s\S]+?});/);
 
     if (!match || !match[1]) {
       console.warn("[YouTube Search] ytInitialData not found in HTML response");
-      return NextResponse.json({
-        success: true,
-        query: finalSearchQuery,
-        results: FALLBACK_KARAOKE_SONGS,
-      });
+      return [];
     }
 
     const json = JSON.parse(match[1]);
@@ -137,12 +104,15 @@ export async function GET(request: Request) {
         ?.contents || [];
 
     const results: YouTubeSearchResult[] = [];
+    const seenIds = new Set<string>();
 
     for (const section of sections) {
       const items = section.itemSectionRenderer?.contents || [];
       for (const item of items) {
         const vr = item.videoRenderer;
-        if (vr && vr.videoId) {
+        if (vr && vr.videoId && !seenIds.has(vr.videoId)) {
+          seenIds.add(vr.videoId);
+
           // Clean title
           const title =
             vr.title?.runs?.[0]?.text ||
@@ -182,22 +152,90 @@ export async function GET(request: Request) {
       if (results.length >= 20) break;
     }
 
-    console.log(`[YouTube Search] Found ${results.length} results for "${finalSearchQuery}"`);
+    return results;
+  } catch (err) {
+    console.error("[YouTube Search Scraping Error]:", err);
+    return [];
+  }
+}
 
-    return NextResponse.json({
-      success: true,
-      query: finalSearchQuery,
-      results: results.length > 0 ? results : FALLBACK_KARAOKE_SONGS,
-    });
-  } catch (error) {
-    console.error("[YouTube Search] Error processing search request:", error);
-    return NextResponse.json(
-      {
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const rawQuery = searchParams.get("q");
+
+    if (!rawQuery || rawQuery.trim().length === 0) {
+      return NextResponse.json({
         success: true,
         query: "",
-        results: FALLBACK_KARAOKE_SONGS,
+        results: [],
+      });
+    }
+
+    const cleanedQuery = rawQuery.trim();
+    const expandedQuery = expandAcronymQuery(cleanedQuery);
+    const lower = expandedQuery.toLowerCase();
+
+    // Check if query already contains music / karaoke terms
+    const hasSpecificKeyword =
+      lower.includes("karaoke") ||
+      lower.includes("beat") ||
+      lower.includes("instrumental") ||
+      lower.includes("tone nam") ||
+      lower.includes("tone nữ") ||
+      lower.includes("remix") ||
+      lower.includes("acapella");
+
+    let results: YouTubeSearchResult[] = [];
+    let usedQuery = expandedQuery;
+
+    if (hasSpecificKeyword) {
+      // Strategy 1: User explicitly searched a keyword or clicked an autocomplete suggestion like "Khóa Ly Biệt karaoke tone nam"
+      // -> Search directly without double-appending keywords!
+      usedQuery = expandedQuery;
+      console.log(`[YouTube Search] Strategy 1 (Direct): "${usedQuery}"`);
+      results = await fetchYouTubeSearch(usedQuery);
+
+      if (results.length === 0 && expandedQuery !== cleanedQuery) {
+        console.log(`[YouTube Search] Strategy 1b (Cleaned): "${cleanedQuery}"`);
+        results = await fetchYouTubeSearch(cleanedQuery);
+      }
+    } else {
+      // Strategy 2: User searched a song name like "Trống Cơm Anh Trai Vượt Ngàn Chông Gai" or "Đom Đóm"
+      // -> First try searching with "karaoke" (NOT "karaoke beat" to avoid zero-results for new songs)
+      const karaokeQuery = `${expandedQuery} karaoke`;
+      usedQuery = karaokeQuery;
+      console.log(`[YouTube Search] Strategy 2 (with karaoke): "${karaokeQuery}"`);
+      results = await fetchYouTubeSearch(karaokeQuery);
+
+      // Strategy 3: If 0 karaoke videos found (e.g. brand new songs, official songs without "karaoke" in title),
+      // fallback to searching the exact song name directly!
+      if (results.length === 0) {
+        console.log(`[YouTube Search] Strategy 3 (Fallback Raw): "${expandedQuery}"`);
+        usedQuery = expandedQuery;
+        results = await fetchYouTubeSearch(expandedQuery);
+      }
+    }
+
+    console.log(`[YouTube Search] Final Results Count: ${results.length} for "${usedQuery}"`);
+
+    // Return exact results (or empty array if no matches found on YouTube)
+    // NEVER dump unrelated fallback songs over a real search query!
+    return NextResponse.json({
+      success: true,
+      query: usedQuery,
+      results,
+    });
+  } catch (error) {
+    console.error("[YouTube Search Route Error]:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        query: "",
+        results: [],
+        message: "Lỗi kết nối tìm kiếm, vui lòng thử lại!",
       },
-      { status: 200 }
+      { status: 500 }
     );
   }
 }
